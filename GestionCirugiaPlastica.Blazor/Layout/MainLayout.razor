@@ -1,0 +1,62 @@
+﻿@inherits LayoutComponentBase
+
+<div class="app-container">
+
+    <!-- COLUMNA 1: MENÚ LATERAL -->
+    <aside class="sidebar">
+        <NavMenu />
+    </aside>
+
+    <!-- COLUMNA 2: CONTENIDO CENTRAL -->
+    <main class="main-content">
+
+        <header class="dashboard-header">
+
+            <div class="header-welcome">
+
+                <div class="doctor-avatar">
+                    <i class="fa-solid fa-user-doctor"></i>
+                </div>
+
+                <div>
+                    <h2>Hola, Dra. Tanger</h2>
+                    <p>Panel de control del consultorio</p>
+                </div>
+
+            </div>
+
+            <div class="header-actions">
+
+                <div class="search-box">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+
+                    <input type="text"
+                           placeholder="Buscar aquí..." />
+                </div>
+
+                <button class="notification-button"
+                        type="button"
+                        title="Notificaciones">
+
+                    <i class="fa-regular fa-bell"></i>
+                    <span class="notification-badge"></span>
+
+                </button>
+
+            </div>
+
+        </header>
+
+        <!-- CONTENIDO DE CADA PÁGINA -->
+        <section class="dashboard-content">
+            @Body
+        </section>
+
+    </main>
+
+    <!-- COLUMNA 3: CALENDARIO Y CITAS -->
+    <aside class="right-panel">
+        <RightCalendarPanel />
+    </aside>
+
+</div>

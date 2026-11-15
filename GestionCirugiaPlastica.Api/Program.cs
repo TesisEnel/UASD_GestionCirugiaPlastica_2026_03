@@ -27,13 +27,26 @@ builder.Services.AddScoped<HistorialClinicoService>();
 builder.Services.AddScoped<PacientesSegurosServices>();
 builder.Services.AddScoped<HistorialEstadosCitasServices>();
 builder.Services.AddScoped<PagosServices>();
-builder.Services.AddScoped<PreoperatoriosServices>(); 
+builder.Services.AddScoped<PreoperatoriosServices>();
 builder.Services.AddScoped<ProcedimientosServices>();
 builder.Services.AddScoped<RecetasServices>();
 builder.Services.AddScoped<RolesServices>();
 builder.Services.AddScoped<SegurosServices>();
 builder.Services.AddScoped<UsuariosServices>();
 
+// Configuración de CORS para permitir la comunicación con Blazor
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("BlazorPolicy", policy =>
+    {
+        policy.WithOrigins(
+            "https://localhost:7144",
+            "http://localhost:5209"
+        )
+        .AllowAnyHeader()
+        .AllowAnyMethod();
+    });
+});
 
 // Configuración de Controllers y OpenAPI
 builder.Services.AddControllers();
@@ -51,6 +64,9 @@ app.MapScalarApiReference(options =>
 });
 
 app.UseHttpsRedirection();
+
+// Activar CORS
+app.UseCors("BlazorPolicy");
 
 app.UseAuthorization();
 

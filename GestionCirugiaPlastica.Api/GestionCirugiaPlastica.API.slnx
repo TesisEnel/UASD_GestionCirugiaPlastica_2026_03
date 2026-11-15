@@ -1,3 +1,6 @@
 <Solution>
+  <Project Path="../GestionCirugiaPlastica.Application/GestionCirugiaPlastica.Application.csproj" />
+  <Project Path="../GestionCirugiaPlastica.Blazor/GestionCirugiaPlastica.Blazor.csproj" />
+  <Project Path="../GestionCirugiaPlastica.Infrastructure/GestionCirugiaPlastica.Infrastructure.csproj" />
   <Project Path="GestionCirugiaPlastica.API.csproj" />
 </Solution>

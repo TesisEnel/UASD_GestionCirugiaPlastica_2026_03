@@ -1,0 +1,224 @@
+﻿
+<div class="right-panel-content">
+
+    <!-- PERFIL DEL CONSULTORIO -->
+    <div class="right-profile">
+        <div class="profile-avatar">
+            <i class="fa-solid fa-user-doctor"></i>
+        </div>
+
+        <div class="profile-info">
+            <strong>Dra. Tanger Castillo</strong>
+            <span>Cirujana plástica</span>
+        </div>
+
+        <button class="profile-options" type="button" title="Más opciones">
+            <i class="fa-solid fa-ellipsis"></i>
+        </button>
+    </div>
+
+    <!-- CALENDARIO -->
+    <section class="calendar-section">
+
+        <div class="calendar-heading">
+            <div>
+                <h3>@CurrentMonth.ToString("MMMM yyyy", new System.Globalization.CultureInfo("es-ES"))</h3>
+                <p>Calendario de citas</p>
+            </div>
+
+            <div class="calendar-navigation">
+                <button type="button" @onclick="PreviousMonth" title="Mes anterior">
+                    <i class="fa-solid fa-chevron-left"></i>
+                </button>
+
+                <button type="button" @onclick="NextMonth" title="Mes siguiente">
+                    <i class="fa-solid fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="calendar-grid">
+
+            @foreach (var dayName in WeekDays)
+            {
+                <div class="calendar-weekday">@dayName</div>
+            }
+
+            @foreach (var day in CalendarDays)
+            {
+                <button type="button"
+                        class="calendar-day @(day.IsCurrentMonth ? "" : "other-month") @(day.Date.Date == SelectedDate.Date ? "selected" : "")"
+                        @onclick="() => SelectDate(day.Date)">
+                    @day.Date.Day
+                </button>
+            }
+
+        </div>
+
+    </section>
+
+    <!-- CITAS DEL DÍA -->
+    <section class="appointments-section">
+
+        <div class="appointments-title">
+            <div>
+                <h3>Citas del día</h3>
+                <p>@SelectedDate.ToString("dd 'de' MMMM", new System.Globalization.CultureInfo("es-ES"))</p>
+            </div>
+
+            <a href="/citas">Ver todas</a>
+        </div>
+
+        <div class="appointment-list">
+
+            @foreach (var appointment in Appointments)
+            {
+                <div class="appointment-item">
+
+                    <div class="appointment-time">
+                        <strong>@appointment.StartTime</strong>
+                        <span>@appointment.EndTime</span>
+                    </div>
+
+                    <div class="appointment-card @(appointment.Highlight ? "highlight" : "")">
+                        <strong>@appointment.Type</strong>
+                        <span>@appointment.Patient</span>
+                    </div>
+
+                </div>
+            }
+
+        </div>
+
+        <div class="appointments-footer">
+            <span>@Appointments.Count citas programadas</span>
+            <a href="/citas">Ver agenda ↗</a>
+        </div>
+
+    </section>
+
+</div>
+
+@code {
+
+    // Mes y fecha seleccionada en el calendario
+    private DateTime CurrentMonth = new DateTime(2026, 11, 1);
+    private DateTime SelectedDate = new DateTime(2026, 11, 14);
+
+    // Nombres de los días de la semana
+    private List<string> WeekDays = new()
+    {
+        "Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sá"
+    };
+
+    // Fechas que se muestran en el calendario
+    private List<CalendarDay> CalendarDays = new();
+
+    // Lista temporal de citas
+    private List<AppointmentItem> Appointments = new()
+    {
+        new AppointmentItem
+        {
+            StartTime = "09:00 AM",
+            EndTime = "10:00 AM",
+            Type = "Consulta",
+            Patient = "María Reyes",
+            Highlight = false
+        },
+
+        new AppointmentItem
+        {
+            StartTime = "10:30 AM",
+            EndTime = "11:30 AM",
+            Type = "Evaluación",
+            Patient = "Laura Castillo",
+            Highlight = true
+        },
+
+        new AppointmentItem
+        {
+            StartTime = "12:00 PM",
+            EndTime = "01:00 PM",
+            Type = "Seguimiento",
+            Patient = "Ana Pérez",
+            Highlight = false
+        },
+
+        new AppointmentItem
+        {
+            StartTime = "02:00 PM",
+            EndTime = "03:00 PM",
+            Type = "Consulta",
+            Patient = "Carolina López",
+            Highlight = false
+        }
+    };
+
+    // Genera los días del calendario según el mes seleccionado
+    protected override void OnInitialized()
+    {
+        GenerateCalendar();
+    }
+
+    private void GenerateCalendar()
+    {
+        CalendarDays.Clear();
+
+        var firstDay = new DateTime(
+            CurrentMonth.Year,
+            CurrentMonth.Month,
+            1);
+
+        int offset = (int)firstDay.DayOfWeek;
+
+        var startDate = firstDay.AddDays(-offset);
+
+        for (int i = 0; i < 42; i++)
+        {
+            var date = startDate.AddDays(i);
+
+            CalendarDays.Add(new CalendarDay
+            {
+                Date = date,
+                IsCurrentMonth = date.Month == CurrentMonth.Month
+            });
+        }
+    }
+
+    // Cambia al mes anterior
+    private void PreviousMonth()
+    {
+        CurrentMonth = CurrentMonth.AddMonths(-1);
+        GenerateCalendar();
+    }
+
+    // Cambia al mes siguiente
+    private void NextMonth()
+    {
+        CurrentMonth = CurrentMonth.AddMonths(1);
+        GenerateCalendar();
+    }
+
+    // Selecciona una fecha del calendario
+    private void SelectDate(DateTime date)
+    {
+        SelectedDate = date;
+    }
+
+    // Modelo para representar los días del calendario
+    private class CalendarDay
+    {
+        public DateTime Date { get; set; }
+        public bool IsCurrentMonth { get; set; }
+    }
+
+    // Modelo temporal para representar las citas
+    private class AppointmentItem
+    {
+        public string StartTime { get; set; } = "";
+        public string EndTime { get; set; } = "";
+        public string Type { get; set; } = "";
+        public string Patient { get; set; } = "";
+        public bool Highlight { get; set; }
+    }
+}

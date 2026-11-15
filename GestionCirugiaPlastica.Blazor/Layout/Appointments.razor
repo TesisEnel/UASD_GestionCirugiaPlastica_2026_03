@@ -1,0 +1,121 @@
+﻿@code {
+    // Lista temporal de citas de ejemplo
+    private List<AppointmentItem> AppointmentList = new()
+    {
+        new AppointmentItem
+        {
+            Patient = "María Reyes",
+            Type = "Consulta",
+            Date = new DateTime(2026, 11, 14),
+            Time = new TimeOnly(9, 0),
+            Status = "Confirmada"
+        },
+        new AppointmentItem
+        {
+            Patient = "Laura Castillo",
+            Type = "Evaluación",
+            Date = new DateTime(2026, 11, 14),
+            Time = new TimeOnly(10, 30),
+            Status = "Pendiente"
+        },
+        new AppointmentItem
+        {
+            Patient = "Ana Pérez",
+            Type = "Cirugía",
+            Date = new DateTime(2026, 11, 15),
+            Time = new TimeOnly(12, 0),
+            Status = "Confirmada"
+        },
+        new AppointmentItem
+        {
+            Patient = "Carolina López",
+            Type = "Seguimiento",
+            Date = new DateTime(2026, 11, 16),
+            Time = new TimeOnly(14, 0),
+            Status = "Cancelada"
+        }
+    };
+
+    // Variables del formulario
+    private bool ShowForm = false;
+    private string NewPatient = "";
+    private string NewType = "";
+    private DateTime NewDate = DateTime.Today;
+    private TimeOnly NewTime = new TimeOnly(9, 0);
+
+    // Variables de búsqueda y filtrado
+    private string SearchText = "";
+    private string SelectedStatus = "Todas";
+
+    // Lista de citas filtradas
+    private IEnumerable<AppointmentItem> FilteredAppointments =>
+        AppointmentList
+            .Where(a => a.Patient.Contains(SearchText, StringComparison.OrdinalIgnoreCase))
+            .Where(a => SelectedStatus == "Todas" || a.Status == SelectedStatus)
+            .OrderBy(a => a.Date)
+            .ThenBy(a => a.Time);
+
+    // Mostrar u ocultar el formulario
+    private void ToggleForm()
+    {
+        ShowForm = !ShowForm;
+    }
+
+    // Guardar una nueva cita
+    private void SaveAppointment()
+    {
+        if (string.IsNullOrWhiteSpace(NewPatient) ||
+            string.IsNullOrWhiteSpace(NewType))
+        {
+            return;
+        }
+
+        AppointmentList.Add(new AppointmentItem
+        {
+            Patient = NewPatient.Trim(),
+            Type = NewType,
+            Date = NewDate,
+            Time = NewTime,
+            Status = "Pendiente"
+        });
+
+        // Limpiar el formulario
+        NewPatient = "";
+        NewType = "";
+        NewDate = DateTime.Today;
+        NewTime = new TimeOnly(9, 0);
+
+        ShowForm = false;
+    }
+
+    // Obtener las iniciales del paciente
+    private string GetInitials(string name)
+    {
+        return string.Join("",
+            name.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Take(2)
+                .Select(word => word[0].ToString().ToUpper()));
+    }
+
+    // Obtener la clase CSS según el estado de la cita
+    private string GetStatusClass(string status)
+    {
+        return status switch
+        {
+            "Confirmada" => "status-confirmed",
+            "Pendiente" => "status-pending",
+            "Cancelada" => "status-cancelled",
+            _ => ""
+        };
+    }
+
+    // Modelo de una cita
+    private class AppointmentItem
+    {
+        public string Patient { get; set; } = "";
+        public string Type { get; set; } = "";
+        public DateTime Date { get; set; }
+        public TimeOnly Time { get; set; }
+        public string Status { get; set; } = "";
+    }
+}

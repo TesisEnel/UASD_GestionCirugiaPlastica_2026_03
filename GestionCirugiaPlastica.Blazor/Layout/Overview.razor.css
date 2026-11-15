@@ -1,0 +1,491 @@
+
+/* CONTENEDOR GENERAL */
+.overview-container {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    width: 100%;
+}
+
+/* ENCABEZADO */
+.overview-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+}
+
+    .overview-heading h1 {
+        margin: 0;
+        color: #36383A;
+        font-size: 23px;
+        font-weight: 700;
+    }
+
+    .overview-heading p {
+        margin: 6px 0 0;
+        color: #9E9A9B;
+        font-size: 12px;
+    }
+
+.date-filter {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border: none;
+    border-radius: 10px;
+    background: #FFFFFF;
+    color: #6F696B;
+    font-size: 11px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+    cursor: pointer;
+}
+
+/* DISTRIBUCIÓN PRINCIPAL */
+.overview-main-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+    gap: 17px;
+    align-items: stretch;
+}
+
+.overview-right-content {
+    display: flex;
+    flex-direction: column;
+    gap: 17px;
+    min-width: 0;
+}
+
+/* TARJETA DE INGRESOS */
+.revenue-card {
+    display: flex;
+    flex-direction: column;
+    padding: 23px;
+    border-radius: 16px;
+    background: linear-gradient(145deg, #9E6E79, #C67C8E);
+    color: #FFFFFF;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+}
+
+.revenue-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+    .revenue-header h3 {
+        margin: 0;
+        font-size: 17px;
+        font-weight: 700;
+    }
+
+    .revenue-header p {
+        margin: 6px 0 0;
+        color: rgba(255, 255, 255, 0.75);
+        font-size: 10px;
+    }
+
+    .revenue-header > i {
+        font-size: 17px;
+    }
+
+/* GRÁFICO DE INGRESOS PROVISIONAL */
+.revenue-chart {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 185px;
+    height: 185px;
+    margin: 25px auto;
+    border-radius: 50%;
+    background: conic-gradient( #F8DCE3 0deg 105deg, #FFFFFF 105deg 245deg, #D8A7B5 245deg 310deg, rgba(255,255,255,0.3) 310deg 360deg );
+    position: relative;
+}
+
+    .revenue-chart::before {
+        content: "";
+        position: absolute;
+        width: 135px;
+        height: 135px;
+        border-radius: 50%;
+        background: #A87984;
+    }
+
+.revenue-chart-center {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 7px;
+    text-align: center;
+}
+
+    .revenue-chart-center span {
+        color: rgba(255, 255, 255, 0.8);
+        font-size: 10px;
+    }
+
+    .revenue-chart-center strong {
+        color: #FFFFFF;
+        font-size: 17px;
+    }
+
+/* DESGLOSE DE INGRESOS */
+.revenue-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 17px;
+    margin-top: auto;
+}
+
+.revenue-row,
+.revenue-row span {
+    display: flex;
+    align-items: center;
+}
+
+.revenue-row {
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 11px;
+}
+
+    .revenue-row span {
+        gap: 8px;
+        color: rgba(255, 255, 255, 0.9);
+    }
+
+    .revenue-row strong {
+        color: #FFFFFF;
+        font-size: 11px;
+        white-space: nowrap;
+    }
+
+.revenue-dot,
+.legend-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    flex-shrink: 0;
+    border-radius: 50%;
+}
+
+.salary-dot {
+    background: #F8DCE3;
+}
+
+.consultation-dot {
+    background: #FFFFFF;
+}
+
+.surgery-dot {
+    background: #D8A7B5;
+}
+
+/* INDICADORES KPI */
+.overview-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 15px;
+}
+
+.kpi-card {
+    padding: 18px;
+    border-radius: 16px;
+    background: #FFFFFF;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+}
+
+.kpi-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    color: #9E9A9B;
+    font-size: 10px;
+}
+
+.kpi-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    border-radius: 10px;
+}
+
+.patients-kpi-icon {
+    background: #E8F4F0;
+    color: #65A996;
+}
+
+.new-patients-kpi-icon {
+    background: #F0EAF5;
+    color: #9274A3;
+}
+
+.kpi-card h2 {
+    margin: 13px 0 8px;
+    color: #36383A;
+    font-size: 27px;
+    font-weight: 700;
+}
+
+.kpi-growth {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 8px;
+    border-radius: 20px;
+    background: #EAF3ED;
+    color: #628A70;
+    font-size: 9px;
+}
+
+/* TARJETAS GENERALES */
+.dashboard-card {
+    min-width: 0;
+    padding: 20px;
+    border: none;
+    border-radius: 16px;
+    background: #FFFFFF;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+}
+
+.section-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 17px;
+}
+
+    .section-heading h3 {
+        margin: 0;
+        color: #36383A;
+        font-size: 14px;
+        font-weight: 700;
+    }
+
+    .section-heading p {
+        margin: 5px 0 0;
+        color: #9E9A9B;
+        font-size: 10px;
+    }
+
+    .section-heading a {
+        color: #9E6E79;
+        font-size: 10px;
+        font-weight: 600;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+/* TABLA DE PACIENTES */
+.table-responsive {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.patients-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+    .patients-table th {
+        padding: 11px 8px;
+        color: #A19B9D;
+        font-size: 9px;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .patients-table td {
+        padding: 12px 8px;
+        border-top: 1px solid #F3EFF0;
+        color: #686365;
+        font-size: 9px;
+        white-space: nowrap;
+    }
+
+.patient-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.patient-avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: #F8E9ED;
+    color: #9E6E79;
+    font-size: 9px;
+    font-weight: 700;
+}
+
+.patient-info strong {
+    color: #36383A;
+    font-size: 9px;
+}
+
+.pdf-icon {
+    color: #D9534F;
+    font-size: 15px;
+}
+
+.table-actions {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+    .table-actions button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 25px;
+        height: 25px;
+        border: none;
+        border-radius: 6px;
+        background: #F8E9ED;
+        color: #9E6E79;
+        cursor: pointer;
+    }
+
+        .table-actions button:hover {
+            background: #EED5DC;
+        }
+
+/* GRÁFICOS INFERIORES */
+.charts-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 17px;
+}
+
+.chart-card {
+    min-height: 220px;
+}
+
+.chart-legend {
+    display: flex;
+    gap: 18px;
+    margin-bottom: 15px;
+}
+
+    .chart-legend span {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: #898386;
+        font-size: 10px;
+    }
+
+.male-dot {
+    background: #9E6E79;
+}
+
+.female-dot {
+    background: #E8B8C5;
+}
+
+.online-dot {
+    background: #65A996;
+}
+
+.offline-dot {
+    background: #C9B5D2;
+}
+
+.chart-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    min-height: 130px;
+    border-radius: 12px;
+    background: #FBF8F9;
+    color: #B58A97;
+}
+
+    .chart-placeholder i {
+        font-size: 35px;
+    }
+
+    .chart-placeholder span {
+        color: #9E9A9B;
+        font-size: 10px;
+    }
+
+/* ADAPTACIÓN A PANTALLAS MEDIANAS */
+@media (max-width: 1200px) {
+    .overview-main-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .revenue-card {
+        min-height: 420px;
+    }
+}
+
+/* ADAPTACIÓN A TABLETAS Y MÓVILES */
+@media (max-width: 768px) {
+    .overview-heading {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+        .overview-heading h1 {
+            font-size: 20px;
+        }
+
+    .overview-kpi-grid,
+    .charts-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .dashboard-card,
+    .revenue-card {
+        padding: 16px;
+    }
+
+    .revenue-chart {
+        width: 165px;
+        height: 165px;
+    }
+
+        .revenue-chart::before {
+            width: 120px;
+            height: 120px;
+        }
+}
+
+/* Espacio para las gráficas de Chart.js */
+.chart-placeholder {
+    position: relative;
+    width: 100%;
+    height: 230px;
+    padding: 10px;
+}
+
+    .chart-placeholder canvas {
+        width: 100% !important;
+        height: 100% !important;
+        display: block;
+    }
+
+/* Ajustar el monto central de ingresos */
+.revenue-chart-center strong {
+    font-size: clamp(16px, 2vw, 26px);
+    white-space: nowrap;
+}

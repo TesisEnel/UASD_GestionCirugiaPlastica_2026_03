@@ -1,0 +1,319 @@
+﻿@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<div class="overview-container">
+
+    <!-- ENCABEZADO -->
+    <div class="overview-heading">
+        <div>
+            <h1>Resumen del Consultorio</h1>
+            <p>Consulta la actividad y el rendimiento de tu consultorio</p>
+        </div>
+
+        <button class="date-filter" type="button">
+            <i class="fa-regular fa-calendar"></i>
+            Noviembre 2026
+            <i class="fa-solid fa-chevron-down"></i>
+        </button>
+    </div>
+
+    <!-- FILA PRINCIPAL -->
+    <div class="overview-main-grid">
+
+        <!-- INGRESOS -->
+        <section class="revenue-card">
+
+            <div class="revenue-header">
+                <div>
+                    <h3>Ingresos</h3>
+                    <p>Distribución de ingresos del consultorio</p>
+                </div>
+
+                <i class="fa-solid fa-ellipsis"></i>
+            </div>
+
+            <div class="revenue-chart">
+                <canvas id="revenueChart"></canvas>
+
+                <div class="revenue-chart-center">
+                    <span>Ganancias del mes</span>
+                    <strong>RD$ 360,000</strong>
+                </div>
+            </div>
+
+            <div class="revenue-breakdown">
+
+                <div class="revenue-row">
+                    <span>
+                        <i class="revenue-dot salary-dot"></i>
+                        Otros ingresos
+                    </span>
+                    <strong>RD$ 45,000</strong>
+                </div>
+
+                <div class="revenue-row">
+                    <span>
+                        <i class="revenue-dot consultation-dot"></i>
+                        Consultas
+                    </span>
+                    <strong>RD$ 85,000</strong>
+                </div>
+
+                <div class="revenue-row">
+                    <span>
+                        <i class="revenue-dot surgery-dot"></i>
+                        Cirugías
+                    </span>
+                    <strong>RD$ 400,000</strong>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- INDICADORES Y TABLA -->
+        <div class="overview-right-content">
+
+            <div class="overview-kpi-grid">
+
+                <div class="kpi-card">
+                    <div class="kpi-top">
+                        <span>Total de pacientes</span>
+                        <div class="kpi-icon patients-kpi-icon">
+                            <i class="fa-solid fa-users"></i>
+                        </div>
+                    </div>
+
+                    <h2>248</h2>
+
+                    <span class="kpi-growth">
+                        <i class="fa-solid fa-arrow-up"></i>
+                        0.55%
+                    </span>
+                </div>
+
+                <div class="kpi-card">
+                    <div class="kpi-top">
+                        <span>Pacientes nuevos</span>
+                        <div class="kpi-icon new-patients-kpi-icon">
+                            <i class="fa-solid fa-user-plus"></i>
+                        </div>
+                    </div>
+
+                    <h2>32</h2>
+
+                    <span class="kpi-growth">
+                        <i class="fa-solid fa-arrow-up"></i>
+                        0.55%
+                    </span>
+                </div>
+
+            </div>
+
+            <!-- TABLA DE PACIENTES -->
+            <section class="dashboard-card patients-section">
+
+                <div class="section-heading">
+                    <div>
+                        <h3>Pacientes recientes</h3>
+                        <p>Últimos pacientes registrados</p>
+                    </div>
+
+                    <a href="/pacientes">Ver todos</a>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="patients-table">
+
+                        <thead>
+                            <tr>
+                                <th>N.º</th>
+                                <th>Nombre</th>
+                                <th>Edad</th>
+                                <th>Fecha y hora</th>
+                                <th>Motivo</th>
+                                <th>Informe</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var patient in Patients)
+                            {
+                                <tr>
+                                    <td>@patient.Id</td>
+
+                                    <td>
+                                        <div class="patient-info">
+                                            <div class="patient-avatar">
+                                                @patient.Initials
+                                            </div>
+
+                                            <strong>@patient.Name</strong>
+                                        </div>
+                                    </td>
+
+                                    <td>@patient.Age</td>
+                                    <td>@patient.DateTime</td>
+                                    <td>@patient.Reason</td>
+
+                                    <td>
+                                        <i class="fa-solid fa-file-pdf pdf-icon"></i>
+                                    </td>
+
+                                    <td>
+                                        <div class="table-actions">
+                                            <button type="button" title="Descargar">
+                                                <i class="fa-solid fa-download"></i>
+                                            </button>
+
+                                            <button type="button" title="Imprimir">
+                                                <i class="fa-solid fa-print"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+
+                    </table>
+                </div>
+            </section>
+
+        </div>
+    </div>
+
+    <!-- GRÁFICOS INFERIORES -->
+    <div class="charts-grid">
+
+        <!-- DISTRIBUCIÓN DE PACIENTES -->
+        <section class="dashboard-card chart-card">
+
+            <div class="section-heading">
+                <div>
+                    <h3>Pacientes</h3>
+                    <p>Distribución de pacientes</p>
+                </div>
+            </div>
+
+            <div class="chart-legend">
+                <span>
+                    <i class="legend-dot male-dot"></i>
+                    Masculino
+                </span>
+
+                <span>
+                    <i class="legend-dot female-dot"></i>
+                    Femenino
+                </span>
+            </div>
+
+            <div class="chart-placeholder">
+                <canvas id="patientsChart"></canvas>
+            </div>
+
+        </section>
+
+        <!-- ACTIVIDAD DEL CONSULTORIO -->
+        <section class="dashboard-card chart-card">
+
+            <div class="section-heading">
+                <div>
+                    <h3>Actividad del consultorio</h3>
+                    <p>Actividad y disponibilidad</p>
+                </div>
+            </div>
+
+            <div class="chart-legend">
+                <span>
+                    <i class="legend-dot online-dot"></i>
+                    En línea
+                </span>
+
+                <span>
+                    <i class="legend-dot offline-dot"></i>
+                    Fuera de línea
+                </span>
+            </div>
+
+            <div class="chart-placeholder">
+                <canvas id="activityChart"></canvas>
+            </div>
+
+        </section>
+
+    </div>
+
+</div>
+
+@code {
+
+    private IJSObjectReference? chartManager;
+
+    // Lista temporal de pacientes para mostrar en el dashboard
+    private List<PatientItem> Patients = new()
+    {
+        new PatientItem
+        {
+            Id = "01",
+            Name = "María Reyes",
+            Initials = "MR",
+            Age = 32,
+            DateTime = "13 nov. 2026",
+            Reason = "Consulta"
+        },
+
+        new PatientItem
+        {
+            Id = "02",
+            Name = "Laura Castillo",
+            Initials = "LC",
+            Age = 28,
+            DateTime = "13 nov. 2026",
+            Reason = "Evaluación"
+        },
+
+        new PatientItem
+        {
+            Id = "03",
+            Name = "Ana Pérez",
+            Initials = "AP",
+            Age = 35,
+            DateTime = "12 nov. 2026",
+            Reason = "Postoperatorio"
+        }
+    };
+
+    // Cargar las gráficas después de mostrar el componente
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            chartManager = await JS.InvokeAsync<IJSObjectReference>(
+                "import", "./js/charts.js");
+
+            await chartManager.InvokeVoidAsync("createRevenueChart");
+            await chartManager.InvokeVoidAsync("createPatientsChart");
+            await chartManager.InvokeVoidAsync("createActivityChart");
+        }
+    }
+
+    // Liberar recursos de JavaScript
+    public async ValueTask DisposeAsync()
+    {
+        if (chartManager is not null)
+        {
+            await chartManager.DisposeAsync();
+        }
+    }
+
+    // Modelo temporal para representar pacientes
+    private class PatientItem
+    {
+        public string Id { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string Initials { get; set; } = "";
+        public int Age { get; set; }
+        public string DateTime { get; set; } = "";
+        public string Reason { get; set; } = "";
+    }
+}
