@@ -1,5 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
-using GestionCirugiaPlastica.Application.Services;
+﻿using GestionCirugiaPlastica.Application.Services;
 using GestionCirugiaPlastica.Infrastructure.Models;
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,72 +10,73 @@ public class PagosController(
     PagosServices pagosService
 ) : ControllerBase
 {
-    // Registrar o actualizar un pago
+    // POST: api/Pagos  (registrar o actualizar un pago)
     [HttpPost]
-    public async Task<IActionResult> Guardar(Pago pago)
+    public async Task<IActionResult> Guardar([FromBody] Pago pago)
     {
         var resultado = await pagosService.Guardar(pago);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
-    // Buscar un pago por ID
+    // GET: api/Pagos/1
     [HttpGet("{id:int}")]
     public async Task<IActionResult> Buscar(int id)
     {
         var resultado = await pagosService.Buscar(id);
-        return Ok(resultado);
+
+        if (resultado.IsFailure)
+            return BadRequest(resultado);
+
+        return resultado.Value is null ? NotFound() : Ok(resultado);
     }
 
-    // Obtener todos los pagos
+    // GET: api/Pagos
     [HttpGet]
     public async Task<IActionResult> GetList()
     {
         var resultado = await pagosService.GetList(p => true);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
-    // Buscar pagos asociados a una cirugía
+    // GET: api/Pagos/cirugia/1
     [HttpGet("cirugia/{cirugiaId:int}")]
     public async Task<IActionResult> BuscarPorCirugia(int cirugiaId)
     {
         var resultado = await pagosService.BuscarPorCirugia(cirugiaId);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
-    // Buscar pagos asociados a una cita
+    // GET: api/Pagos/cita/1
     [HttpGet("cita/{citaId:int}")]
     public async Task<IActionResult> BuscarPorCita(int citaId)
     {
         var resultado = await pagosService.BuscarPorCita(citaId);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
-    // Buscar pagos de una fecha específica
+    // GET: api/Pagos/fecha?fecha=2026-03-10
     [HttpGet("fecha")]
     public async Task<IActionResult> BuscarPorFecha([FromQuery] DateTime fecha)
     {
         var resultado = await pagosService.BuscarPorFecha(fecha);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
-    // Buscar pagos entre dos fechas
+    // GET: api/Pagos/rango-fechas?fechaInicio=2026-03-01&fechaFin=2026-03-31
     [HttpGet("rango-fechas")]
     public async Task<IActionResult> BuscarPorRangoFechas(
         [FromQuery] DateTime fechaInicio,
         [FromQuery] DateTime fechaFin)
     {
-        var resultado = await pagosService.BuscarPorRangoFechas(
-            fechaInicio,
-            fechaFin);
-
-        return Ok(resultado);
+        var resultado = await pagosService.BuscarPorRangoFechas(fechaInicio, fechaFin);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
-    // Eliminar un pago
+    // DELETE: api/Pagos/1
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Eliminar(int id)
     {
         var resultado = await pagosService.Eliminar(id);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 }

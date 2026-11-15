@@ -1,0 +1,30 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<LangVersion>latest</LangVersion>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<RootNamespace>GestionCirugiaPlastica.Application.UnitTests</RootNamespace>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.12.0" />
+		<PackageReference Include="MSTest" Version="4.5.3" />
+		<!-- Los services usan ExecuteDeleteAsync, que NO soporta el provider InMemory.
+         SQLite en memoria es relacional y sí lo soporta. -->
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.15" />
+		<PackageReference Include="MSTest.TestAdapter" Version="4.5.3" />
+		<PackageReference Include="MSTest.TestFramework" Version="4.5.3" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\GestionCirugiaPlastica.Application\GestionCirugiaPlastica.Application.csproj" />
+		<ProjectReference Include="..\GestionCirugiaPlastica.Infrastructure\GestionCirugiaPlastica.Infrastructure.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
+	</ItemGroup>
+
+</Project>

@@ -2,10 +2,8 @@
 using GestionCirugiaPlastica.Infrastructure.Data;
 using GestionCirugiaPlastica.Infrastructure.Models;
 using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
+using System.Data.Common;
 using System.Linq.Expressions;
-using System.Text;
 
 namespace GestionCirugiaPlastica.Application.Services;
 
@@ -13,89 +11,110 @@ public class PacientesSegurosServices(
     IDbContextFactory<GestionCirugiaPlasticaContext> contextFactory
 ) : IServiceResult<PacienteSeguro, int>
 {
-    
+    // ── Errores ────────────────────────────────────────────────────────────
+    // Recuerda: Result.Success(false) NO es un fallo. Para fallar: Result.Failure(error).
+    private static readonly Error DatosRequeridos =
+        new("PacienteSeguro.DatosRequeridos", "Debe indicar un paciente y un seguro válidos.");
+
+    private static readonly Error TextoMuyLargo =
+        new("PacienteSeguro.TextoMuyLargo", "La póliza, el titular y las observaciones no pueden pasar de 250 caracteres.");
+
+    private static readonly Error PacienteNoExiste =
+        new("PacienteSeguro.PacienteNoExiste", "El paciente indicado no existe.");
+
+    private static readonly Error SeguroNoExiste =
+        new("PacienteSeguro.SeguroNoExiste", "El seguro indicado no existe.");
+
+    private static readonly Error SeguroInactivo =
+        new("PacienteSeguro.SeguroInactivo", "El seguro indicado está inactivo.");
+
+    private static readonly Error RegistroNoExiste =
+        new("PacienteSeguro.NoExiste", "El registro de seguro del paciente no existe.");
+
+    private static readonly Error NoPuedeCambiar =
+        new("PacienteSeguro.NoPuedeCambiar", "No se puede cambiar el paciente ni el seguro de un registro existente.");
+
+    private static readonly Error ErrorAlGuardar =
+        new("PacienteSeguro.ErrorAlGuardar", "No se pudo guardar el seguro del paciente.");
+
+    private static readonly Error ErrorAlEliminar =
+        new("PacienteSeguro.ErrorAlEliminar", "No se pudo eliminar el seguro del paciente.");
+
+    // ── Guardar ────────────────────────────────────────────────────────────
     public async Task<Result> Guardar(PacienteSeguro pacienteSeguro)
     {
         if (pacienteSeguro == null ||
             pacienteSeguro.PacienteId <= 0 ||
-            pacienteSeguro.SeguroId <= 0 ||
-            pacienteSeguro.NumeroPoliza?.Length > 250 ||
-            pacienteSeguro.Titular?.Length > 250 ||
-            pacienteSeguro.Observaciones?.Length > 250)
-        {
-            return Result.Success(false);
-        }
+            pacienteSeguro.SeguroId <= 0)
+            return Result.Failure(DatosRequeridos);
+
+        if (pacienteSeguro.NumeroPoliza?.Trim().Length > 250 ||
+            pacienteSeguro.Titular?.Trim().Length > 250 ||
+            pacienteSeguro.Observaciones?.Trim().Length > 250)
+            return Result.Failure(TextoMuyLargo);
 
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
-        
         bool pacienteExiste = await contexto.Pacientes
             .AnyAsync(p => p.PacienteId == pacienteSeguro.PacienteId);
 
         if (!pacienteExiste)
-            return Result.Success(false);
+            return Result.Failure(PacienteNoExiste);
 
-        // Comprobar que el seguro existe
         var seguro = await contexto.Seguros
             .FirstOrDefaultAsync(s => s.SeguroId == pacienteSeguro.SeguroId);
 
         if (seguro == null)
-            return Result.Success(false);
+            return Result.Failure(SeguroNoExiste);
 
-        if (pacienteSeguro.PacienteSeguroId == 0)
-        {
-            
-            if (!seguro.Activo)
-                return Result.Success(false);
-
-            var nuevoRegistro = new PacienteSeguro
-            {
-                PacienteId = pacienteSeguro.PacienteId,
-                SeguroId = pacienteSeguro.SeguroId,
-                NumeroPoliza = pacienteSeguro.NumeroPoliza?.Trim(),
-                Titular = pacienteSeguro.Titular?.Trim(),
-                FechaVencimiento = pacienteSeguro.FechaVencimiento,
-                Observaciones = pacienteSeguro.Observaciones?.Trim()
-            };
-
-            contexto.PacienteSeguros.Add(nuevoRegistro);
-
-            return Result.Success(
-                await contexto.SaveChangesAsync() > 0
-            );
-        }
-
-        
-        var existente = await contexto.PacienteSeguros
-            .FirstOrDefaultAsync(p =>
-                p.PacienteSeguroId == pacienteSeguro.PacienteSeguroId);
-
-        if (existente == null)
-            return Result.Success(false);
-
-        
-        if (existente.PacienteId != pacienteSeguro.PacienteId ||
-            existente.SeguroId != pacienteSeguro.SeguroId)
-        {
-            return Result.Success(false);
-        }
-
-       
         if (!seguro.Activo)
-            return Result.Success(false);
+            return Result.Failure(SeguroInactivo);
 
-        
-        existente.NumeroPoliza = pacienteSeguro.NumeroPoliza?.Trim();
-        existente.Titular = pacienteSeguro.Titular?.Trim();
-        existente.FechaVencimiento = pacienteSeguro.FechaVencimiento;
-        existente.Observaciones = pacienteSeguro.Observaciones?.Trim();
+        try
+        {
+            if (pacienteSeguro.PacienteSeguroId == 0)
+            {
+                // Se copian solo los campos propios. Así no se guarda por accidente
+                // el Paciente o el Seguro que vengan anidados en el JSON.
+                contexto.PacienteSeguros.Add(new PacienteSeguro
+                {
+                    PacienteId = pacienteSeguro.PacienteId,
+                    SeguroId = pacienteSeguro.SeguroId,
+                    NumeroPoliza = pacienteSeguro.NumeroPoliza?.Trim(),
+                    Titular = pacienteSeguro.Titular?.Trim(),
+                    FechaVencimiento = pacienteSeguro.FechaVencimiento,
+                    Observaciones = pacienteSeguro.Observaciones?.Trim()
+                });
+            }
+            else
+            {
+                var existente = await contexto.PacienteSeguros
+                    .FirstOrDefaultAsync(p => p.PacienteSeguroId == pacienteSeguro.PacienteSeguroId);
 
-        await contexto.SaveChangesAsync();
+                if (existente == null)
+                    return Result.Failure(RegistroNoExiste);
 
-        return Result.Success(true);
+                if (existente.PacienteId != pacienteSeguro.PacienteId ||
+                    existente.SeguroId != pacienteSeguro.SeguroId)
+                    return Result.Failure(NoPuedeCambiar);
+
+                existente.NumeroPoliza = pacienteSeguro.NumeroPoliza?.Trim();
+                existente.Titular = pacienteSeguro.Titular?.Trim();
+                existente.FechaVencimiento = pacienteSeguro.FechaVencimiento;
+                existente.Observaciones = pacienteSeguro.Observaciones?.Trim();
+            }
+
+            await contexto.SaveChangesAsync();
+
+            return Result.Success();
+        }
+        catch (DbUpdateException)
+        {
+            return Result.Failure(ErrorAlGuardar);
+        }
     }
 
-    
+    // ── Consultas ──────────────────────────────────────────────────────────
     public async Task<Result<PacienteSeguro?>> Buscar(int pacienteSeguroId)
     {
         await using var contexto = await contextFactory.CreateDbContextAsync();
@@ -104,13 +123,11 @@ public class PacientesSegurosServices(
             .AsNoTracking()
             .Include(p => p.Paciente)
             .Include(p => p.Seguro)
-            .FirstOrDefaultAsync(p =>
-                p.PacienteSeguroId == pacienteSeguroId);
+            .FirstOrDefaultAsync(p => p.PacienteSeguroId == pacienteSeguroId);
 
         return Result<PacienteSeguro?>.Success(pacienteSeguro);
     }
 
-    
     public async Task<Result<List<PacienteSeguro>>> GetList(
         Expression<Func<PacienteSeguro, bool>> criterio)
     {
@@ -126,9 +143,7 @@ public class PacientesSegurosServices(
         return Result<List<PacienteSeguro>>.Success(pacientesSeguros);
     }
 
-    
-    public async Task<Result<List<PacienteSeguro>>> BuscarPorPaciente(
-        int pacienteId)
+    public async Task<Result<List<PacienteSeguro>>> BuscarPorPaciente(int pacienteId)
     {
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
@@ -137,20 +152,28 @@ public class PacientesSegurosServices(
             .Include(p => p.Seguro)
             .Where(p => p.PacienteId == pacienteId)
             .OrderByDescending(p => p.FechaRegistro)
+            .ThenByDescending(p => p.PacienteSeguroId)
             .ToListAsync();
 
         return Result<List<PacienteSeguro>>.Success(pacientesSeguros);
     }
 
-    
+    // ── Eliminar ───────────────────────────────────────────────────────────
     public async Task<Result> Eliminar(int pacienteSeguroId)
     {
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
-        bool eliminado = await contexto.PacienteSeguros
-            .Where(p => p.PacienteSeguroId == pacienteSeguroId)
-            .ExecuteDeleteAsync() > 0;
+        try
+        {
+            bool eliminado = await contexto.PacienteSeguros
+                .Where(p => p.PacienteSeguroId == pacienteSeguroId)
+                .ExecuteDeleteAsync() > 0;
 
-        return Result.Success(eliminado);
+            return eliminado ? Result.Success() : Result.Failure(RegistroNoExiste);
+        }
+        catch (Exception ex) when (ex is DbUpdateException or DbException)
+        {
+            return Result.Failure(ErrorAlEliminar);
+        }
     }
 }

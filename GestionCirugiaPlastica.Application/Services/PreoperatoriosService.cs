@@ -2,10 +2,7 @@
 using GestionCirugiaPlastica.Infrastructure.Data;
 using GestionCirugiaPlastica.Infrastructure.Models;
 using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
 using System.Linq.Expressions;
-using System.Text;
 
 namespace GestionCirugiaPlastica.Application.Services;
 
@@ -13,64 +10,98 @@ public class PreoperatoriosServices(
     IDbContextFactory<GestionCirugiaPlasticaContext> contextFactory
 ) : IServiceResult<Preoperatorio, int>
 {
-    // 1. Registrar una nueva evaluación preoperatoria
+    // ── Errores ────────────────────────────────────────────────────────────
+    // Recuerda: Result.Success(false) NO es un fallo. Para fallar: Result.Failure(error).
+    private static readonly Error PreoperatorioRequerido =
+        new("Preoperatorio.Requerido", "Debe enviar los datos de la evaluación preoperatoria.");
+
+    private static readonly Error NoSeEdita =
+        new("Preoperatorio.NoSeEdita", "Las evaluaciones preoperatorias solo permiten registros nuevos.");
+
+    private static readonly Error CirugiaRequerida =
+        new("Preoperatorio.CirugiaRequerida", "Debe indicar una cirugía válida.");
+
+    private static readonly Error CirugiaNoExiste =
+        new("Preoperatorio.CirugiaNoExiste", "La cirugía indicada no existe.");
+
+    private static readonly Error AutorizacionIncompleta =
+        new("Preoperatorio.AutorizacionIncompleta",
+            "Para autorizar se requiere el análisis de laboratorio y las evaluaciones cardiológica y anestésica.");
+
+    private static readonly Error ErrorAlGuardar =
+        new("Preoperatorio.ErrorAlGuardar", "No se pudo guardar la evaluación preoperatoria.");
+
+    private static readonly Error EliminarNoPermitido =
+        new("Preoperatorio.EliminarNoPermitido", "No se permite eliminar evaluaciones clínicas.");
+
+    // ── Guardar ────────────────────────────────────────────────────────────
+    // Registrar una nueva evaluación preoperatoria (solo inserta; no se edita)
     public async Task<Result> Guardar(Preoperatorio preoperatorio)
     {
-        if (preoperatorio == null ||
-            preoperatorio.PreoperatorioId != 0 ||
-            preoperatorio.CirugiaId <= 0)
-        {
-            return Result.Success(false);
-        }
+        if (preoperatorio == null)
+            return Result.Failure(PreoperatorioRequerido);
 
-        await using var contexto = await contextFactory.CreateDbContextAsync();
+        if (preoperatorio.PreoperatorioId != 0)
+            return Result.Failure(NoSeEdita);
 
-        // Comprobar que la cirugía existe
-        bool cirugiaExiste = await contexto.Cirugias
-            .AnyAsync(c => c.CirugiaId == preoperatorio.CirugiaId);
+        if (preoperatorio.CirugiaId <= 0)
+            return Result.Failure(CirugiaRequerida);
 
-        if (!cirugiaExiste)
-            return Result.Success(false);
-
-        // Validar autorización médica
+        // Para autorizar deben estar los tres requisitos.
         if (preoperatorio.Autorizado &&
             (string.IsNullOrWhiteSpace(preoperatorio.AnalisisLaboratorio) ||
              string.IsNullOrWhiteSpace(preoperatorio.EvaluacionCardiologica) ||
              string.IsNullOrWhiteSpace(preoperatorio.EvaluacionAnestesica)))
+            return Result.Failure(AutorizacionIncompleta);
+
+        await using var contexto = await contextFactory.CreateDbContextAsync();
+
+        bool cirugiaExiste = await contexto.Cirugias
+            .AnyAsync(c => c.CirugiaId == preoperatorio.CirugiaId);
+
+        if (!cirugiaExiste)
+            return Result.Failure(CirugiaNoExiste);
+
+        try
         {
-            return Result.Success(false);
+            // Se copian solo los campos propios, así no se guarda por accidente
+            // la Cirugía que venga anidada en el JSON.
+            contexto.Preoperatorios.Add(new Preoperatorio
+            {
+                // La fecha de la evaluación la pone el servidor.
+                FechaEvaluacion = DateTime.Now,
+                CirugiaId = preoperatorio.CirugiaId,
+                AnalisisLaboratorio = preoperatorio.AnalisisLaboratorio?.Trim(),
+                EvaluacionCardiologica = preoperatorio.EvaluacionCardiologica?.Trim(),
+                EvaluacionAnestesica = preoperatorio.EvaluacionAnestesica?.Trim(),
+                Autorizado = preoperatorio.Autorizado,
+                Observaciones = preoperatorio.Observaciones?.Trim()
+            });
+
+            await contexto.SaveChangesAsync();
+
+            return Result.Success();
         }
-
-        // Registrar una evaluación nueva
-        var nuevoPreoperatorio = new Preoperatorio
+        catch (DbUpdateException)
         {
-            CirugiaId = preoperatorio.CirugiaId,
-            AnalisisLaboratorio = preoperatorio.AnalisisLaboratorio?.Trim(),
-            EvaluacionCardiologica = preoperatorio.EvaluacionCardiologica?.Trim(),
-            EvaluacionAnestesica = preoperatorio.EvaluacionAnestesica?.Trim(),
-            Autorizado = preoperatorio.Autorizado,
-            Observaciones = preoperatorio.Observaciones?.Trim()
-        };
-
-        contexto.Preoperatorios.Add(nuevoPreoperatorio);
-
-        return Result.Success(await contexto.SaveChangesAsync() > 0);
+            return Result.Failure(ErrorAlGuardar);
+        }
     }
 
-    // 2. Buscar evaluación por ID
+    // ── Consultas ──────────────────────────────────────────────────────────
+    // Buscar evaluación por ID
     public async Task<Result<Preoperatorio?>> Buscar(int preoperatorioId)
     {
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
         var preoperatorio = await contexto.Preoperatorios
             .AsNoTracking()
-            .FirstOrDefaultAsync(p =>
-                p.PreoperatorioId == preoperatorioId);
+            .FirstOrDefaultAsync(p => p.PreoperatorioId == preoperatorioId);
 
         return Result<Preoperatorio?>.Success(preoperatorio);
     }
 
-    // 3. Obtener evaluaciones según un criterio
+    // Obtener evaluaciones según un criterio
     public async Task<Result<List<Preoperatorio>>> GetList(
         Expression<Func<Preoperatorio, bool>> criterio)
     {
@@ -86,7 +117,7 @@ public class PreoperatoriosServices(
         return Result<List<Preoperatorio>>.Success(preoperatorios);
     }
 
-    // 4. Consultar historial de evaluaciones de una cirugía
+    // Historial de evaluaciones de una cirugía (la más reciente primero)
     public async Task<Result<List<Preoperatorio>>> BuscarHistorial(int cirugiaId)
     {
         await using var contexto = await contextFactory.CreateDbContextAsync();
@@ -101,24 +132,12 @@ public class PreoperatoriosServices(
         return Result<List<Preoperatorio>>.Success(historial);
     }
 
-    // 5. Buscar evaluaciones por cirugía
-    public async Task<Result<List<Preoperatorio>>> BuscarPorCirugia(
-        int cirugiaId)
-    {
-        await using var contexto = await contextFactory.CreateDbContextAsync();
+    // Evaluaciones por cirugía (mismo resultado que BuscarHistorial)
+    public Task<Result<List<Preoperatorio>>> BuscarPorCirugia(int cirugiaId)
+        => BuscarHistorial(cirugiaId);
 
-        var evaluaciones = await contexto.Preoperatorios
-            .AsNoTracking()
-            .Where(p => p.CirugiaId == cirugiaId)
-            .OrderByDescending(p => p.FechaEvaluacion)
-            .ToListAsync();
-
-        return Result<List<Preoperatorio>>.Success(evaluaciones);
-    }
-
-    // 6. Buscar evaluaciones según autorización
-    public async Task<Result<List<Preoperatorio>>> BuscarPorAutorizacion(
-        bool autorizado)
+    // Evaluaciones según autorización
+    public async Task<Result<List<Preoperatorio>>> BuscarPorAutorizacion(bool autorizado)
     {
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
@@ -126,12 +145,13 @@ public class PreoperatoriosServices(
             .AsNoTracking()
             .Where(p => p.Autorizado == autorizado)
             .OrderByDescending(p => p.FechaEvaluacion)
+            .ThenByDescending(p => p.PreoperatorioId)
             .ToListAsync();
 
         return Result<List<Preoperatorio>>.Success(evaluaciones);
     }
 
-    // 7. Buscar evaluaciones con requisitos pendientes
+    // Evaluaciones con requisitos pendientes: sin autorizar o con algún requisito vacío
     public async Task<Result<List<Preoperatorio>>> BuscarRequisitosPendientes()
     {
         await using var contexto = await contextFactory.CreateDbContextAsync();
@@ -147,21 +167,19 @@ public class PreoperatoriosServices(
                 p.EvaluacionAnestesica == null ||
                 p.EvaluacionAnestesica.Trim() == "")
             .OrderByDescending(p => p.FechaEvaluacion)
+            .ThenByDescending(p => p.PreoperatorioId)
             .ToListAsync();
 
         return Result<List<Preoperatorio>>.Success(pendientes);
     }
 
-    // 8. Buscar evaluaciones por rango de fechas
+    // Evaluaciones por rango de fechas (ambas incluidas)
     public async Task<Result<List<Preoperatorio>>> BuscarPorFecha(
         DateTime fechaDesde,
         DateTime fechaHasta)
     {
         if (fechaDesde.Date > fechaHasta.Date)
-        {
-            return Result<List<Preoperatorio>>.Success(
-                new List<Preoperatorio>());
-        }
+            return Result<List<Preoperatorio>>.Success(new List<Preoperatorio>());
 
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
@@ -170,18 +188,16 @@ public class PreoperatoriosServices(
 
         var evaluaciones = await contexto.Preoperatorios
             .AsNoTracking()
-            .Where(p =>
-                p.FechaEvaluacion >= desde &&
-                p.FechaEvaluacion < hasta)
+            .Where(p => p.FechaEvaluacion >= desde && p.FechaEvaluacion < hasta)
             .OrderByDescending(p => p.FechaEvaluacion)
+            .ThenByDescending(p => p.PreoperatorioId)
             .ToListAsync();
 
         return Result<List<Preoperatorio>>.Success(evaluaciones);
     }
 
-    // 9. No permitir eliminar evaluaciones clínicas
+    // ── Eliminar ───────────────────────────────────────────────────────────
+    // Las evaluaciones clínicas no se borran: se devuelve un fallo explícito.
     public Task<Result> Eliminar(int preoperatorioId)
-    {
-        return Task.FromResult<Result>(Result.Success(false));
-    }
+        => Task.FromResult(Result.Failure(EliminarNoPermitido));
 }

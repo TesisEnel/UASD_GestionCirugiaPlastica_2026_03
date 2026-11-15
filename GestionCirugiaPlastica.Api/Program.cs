@@ -4,6 +4,7 @@ using GestionCirugiaPlastica.Application.Services;
 using GestionCirugiaPlastica.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
+using System.Text.Json.Serialization.Metadata;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,6 +18,7 @@ builder.Services.AddDbContextFactory<GestionCirugiaPlasticaContext>(options =>
 // Registro de los servicios
 builder.Services.AddScoped<IServiceResult<Paciente, int>, PacientesService>();
 builder.Services.AddScoped<CirugiasService>();
+builder.Services.AddScoped<IServiceResult<Cirugia, int>, CirugiasService>();
 builder.Services.AddScoped<CitasService>();
 builder.Services.AddScoped<ConsultasService>();
 builder.Services.AddScoped<ControlesPostoperatoriosService>();
@@ -49,7 +51,23 @@ builder.Services.AddCors(options =>
 });
 
 // Configuración de Controllers y OpenAPI
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(o =>
+        o.JsonSerializerOptions.ReferenceHandler =
+            System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles);
+
+// El generador de OpenAPI usa estas opciones (no las de MVC). Se quitan las propiedades
+// de navegación de las entidades SOLO para el esquema, porque tienen referencias
+// circulares (Receta <-> DetallesReceta, etc.) y rompen el documento con
+// "CurrentDepth (64)". Las respuestas reales de la API no cambian.
+builder.Services.ConfigureHttpJsonOptions(o =>
+{
+    o.SerializerOptions.TypeInfoResolver = new DefaultJsonTypeInfoResolver
+    {
+        Modifiers = { QuitarNavegacionParaOpenApi }
+    };
+});
+
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
@@ -73,3 +91,20 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+static void QuitarNavegacionParaOpenApi(JsonTypeInfo typeInfo)
+{
+    var espacioEntidades = typeof(Paciente).Namespace;
+
+    if (typeInfo.Kind != JsonTypeInfoKind.Object || typeInfo.Type.Namespace != espacioEntidades)
+        return;
+
+    for (int i = typeInfo.Properties.Count - 1; i >= 0; i--)
+    {
+        var tipo = typeInfo.Properties[i].PropertyType;
+        var tipoInterno = tipo.IsGenericType ? tipo.GetGenericArguments()[0] : tipo;
+
+        if (tipoInterno.Namespace == espacioEntidades)
+            typeInfo.Properties.RemoveAt(i);
+    }
+}

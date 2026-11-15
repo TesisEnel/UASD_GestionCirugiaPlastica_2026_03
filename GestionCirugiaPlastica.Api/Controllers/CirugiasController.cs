@@ -21,6 +21,10 @@ public class CirugiasController : ControllerBase
     public async Task<IActionResult> Get()
     {
         var resultado = await _cirugiasService.GetList(c => true);
+
+        if (resultado.IsFailure)
+            return BadRequest(resultado);
+
         return Ok(resultado);
     }
 
@@ -29,6 +33,13 @@ public class CirugiasController : ControllerBase
     public async Task<IActionResult> Get(int id)
     {
         var resultado = await _cirugiasService.Buscar(id);
+
+        if (resultado.IsFailure)
+            return BadRequest(resultado);
+
+        if (resultado.Value is null)
+            return NotFound();
+
         return Ok(resultado);
     }
 
@@ -37,6 +48,10 @@ public class CirugiasController : ControllerBase
     public async Task<IActionResult> Post([FromBody] Cirugia cirugia)
     {
         var resultado = await _cirugiasService.Guardar(cirugia);
+
+        if (resultado.IsFailure)
+            return BadRequest(resultado);
+
         return Ok(resultado);
     }
 
@@ -44,7 +59,16 @@ public class CirugiasController : ControllerBase
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
+        var existente = await _cirugiasService.Buscar(id);
+
+        if (existente.IsSuccess && existente.Value is null)
+            return NotFound();
+
         var resultado = await _cirugiasService.Eliminar(id);
+
+        if (resultado.IsFailure)
+            return Conflict(resultado);
+
         return Ok(resultado);
     }
 }

@@ -1,5 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
-using GestionCirugiaPlastica.Application.Services;
+﻿using GestionCirugiaPlastica.Application.Services;
 using GestionCirugiaPlastica.Infrastructure.Models;
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,43 +10,47 @@ public class PacienteSeguroController(
     PacientesSegurosServices pacientesSegurosService
 ) : ControllerBase
 {
-    // Registrar o actualizar
+    // POST: api/PacienteSeguro  (registrar o actualizar)
     [HttpPost]
-    public async Task<IActionResult> Guardar(PacienteSeguro pacienteSeguro)
+    public async Task<IActionResult> Guardar([FromBody] PacienteSeguro pacienteSeguro)
     {
         var resultado = await pacientesSegurosService.Guardar(pacienteSeguro);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
-    // Buscar por ID
+    // GET: api/PacienteSeguro/1
     [HttpGet("{id:int}")]
     public async Task<IActionResult> Buscar(int id)
     {
         var resultado = await pacientesSegurosService.Buscar(id);
-        return Ok(resultado);
+
+        if (resultado.IsFailure)
+            return BadRequest(resultado);
+
+        return resultado.Value is null ? NotFound() : Ok(resultado);
     }
 
-    // Listar todos
+    // GET: api/PacienteSeguro
     [HttpGet]
     public async Task<IActionResult> GetList()
     {
         var resultado = await pacientesSegurosService.GetList(p => true);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
-    // Buscar seguros de un paciente
+    // GET: api/PacienteSeguro/paciente/1
     [HttpGet("paciente/{pacienteId:int}")]
     public async Task<IActionResult> BuscarPorPaciente(int pacienteId)
     {
         var resultado = await pacientesSegurosService.BuscarPorPaciente(pacienteId);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
-    // Eliminar
+    // DELETE: api/PacienteSeguro/1
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Eliminar(int id)
     {
         var resultado = await pacientesSegurosService.Eliminar(id);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 }

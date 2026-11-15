@@ -1,5 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
-using GestionCirugiaPlastica.Application.Services;
+﻿using GestionCirugiaPlastica.Application.Services;
 using GestionCirugiaPlastica.Infrastructure.Models;
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,84 +10,91 @@ public class RolesController(
     RolesServices rolesService
 ) : ControllerBase
 {
-    // Registrar o actualizar un rol
+    // POST: api/Roles  (registrar o actualizar un rol)
     [HttpPost]
-    public async Task<IActionResult> Guardar(Role rol)
+    public async Task<IActionResult> Guardar([FromBody] Role rol)
     {
         var resultado = await rolesService.Guardar(rol);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
-    // Buscar un rol por ID
+    // GET: api/Roles/1
     [HttpGet("{id:int}")]
     public async Task<IActionResult> Buscar(int id)
     {
         var resultado = await rolesService.Buscar(id);
-        return Ok(resultado);
+
+        if (resultado.IsFailure)
+            return BadRequest(resultado);
+
+        return resultado.Value is null ? NotFound() : Ok(resultado);
     }
 
-    // Obtener todos los roles
+    // GET: api/Roles
     [HttpGet]
     public async Task<IActionResult> GetList()
     {
         var resultado = await rolesService.GetList(r => true);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
-    // Buscar roles por nombre
+    // GET: api/Roles/nombre?nombre=admin
     [HttpGet("nombre")]
-    public async Task<IActionResult> BuscarPorNombre(
-        [FromQuery] string nombre)
+    public async Task<IActionResult> BuscarPorNombre([FromQuery] string nombre)
     {
         var resultado = await rolesService.BuscarPorNombre(nombre);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
-    // Buscar el rol asignado a un usuario
+    // GET: api/Roles/usuario/1  (rol asignado a ese usuario)
     [HttpGet("usuario/{usuarioId:int}")]
     public async Task<IActionResult> BuscarPorUsuario(int usuarioId)
     {
         var resultado = await rolesService.BuscarPorUsuario(usuarioId);
-        return Ok(resultado);
+
+        if (resultado.IsFailure)
+            return BadRequest(resultado);
+
+        return resultado.Value is null ? NotFound() : Ok(resultado);
     }
 
-    // Buscar los usuarios pertenecientes a un rol
+    // GET: api/Roles/1/usuarios
     [HttpGet("{rolId:int}/usuarios")]
     public async Task<IActionResult> BuscarUsuarios(int rolId)
     {
         var resultado = await rolesService.BuscarUsuarios(rolId);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
-    // Comprobar si un rol tiene usuarios asignados
+    // GET: api/Roles/1/tiene-usuarios
     [HttpGet("{rolId:int}/tiene-usuarios")]
     public async Task<IActionResult> TieneUsuarios(int rolId)
     {
         var resultado = await rolesService.TieneUsuarios(rolId);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
-    // Contar usuarios asignados a un rol
+    // GET: api/Roles/1/cantidad-usuarios
     [HttpGet("{rolId:int}/cantidad-usuarios")]
     public async Task<IActionResult> ContarUsuarios(int rolId)
     {
         var resultado = await rolesService.ContarUsuarios(rolId);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
-    // Comprobar si existe un administrador activo
+    // GET: api/Roles/existe-administrador-activo
     [HttpGet("existe-administrador-activo")]
     public async Task<IActionResult> ExisteAdministradorActivo()
     {
         var resultado = await rolesService.ExisteAdministradorActivo();
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
-    // Eliminar un rol
+    // DELETE: api/Roles/1
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Eliminar(int id)
     {
         var resultado = await rolesService.Eliminar(id);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 }

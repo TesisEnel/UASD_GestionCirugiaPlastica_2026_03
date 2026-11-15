@@ -2,6 +2,7 @@
 using GestionCirugiaPlastica.Infrastructure.Data;
 using GestionCirugiaPlastica.Infrastructure.Models;
 using Microsoft.EntityFrameworkCore;
+using System.Data.Common;
 using System.Linq.Expressions;
 
 namespace GestionCirugiaPlastica.Application.Services;
@@ -10,47 +11,110 @@ public class GastosService(
     IDbContextFactory<GestionCirugiaPlasticaContext> contextFactory
 ) : IServiceResult<Gasto, int>
 {
-    // Registrar o modificar un gasto
+    // ── Errores ────────────────────────────────────────────────────────────
+    // Recuerda: Result.Success(false) NO es un fallo. Para fallar: Result.Failure(error).
+    private static readonly Error ConceptoRequerido =
+        new("Gasto.ConceptoRequerido", "El concepto es obligatorio.");
+
+    private static readonly Error MontoInvalido =
+        new("Gasto.MontoInvalido", "El monto debe ser mayor que cero.");
+
+    private static readonly Error TextoMuyLargo =
+        new("Gasto.TextoMuyLargo", "Concepto, categoría y método de pago no pueden pasar de 250 caracteres.");
+
+    private static readonly Error UsuarioNoExiste =
+        new("Gasto.UsuarioNoExiste", "El usuario indicado no existe.");
+
+    private static readonly Error GastoNoExiste =
+        new("Gasto.NoExiste", "El gasto indicado no existe.");
+
+    private static readonly Error ErrorAlGuardar =
+        new("Gasto.ErrorAlGuardar", "No se pudo guardar el gasto.");
+
+    private static readonly Error ErrorAlEliminar =
+        new("Gasto.ErrorAlEliminar", "No se pudo eliminar el gasto.");
+
+    // ── Guardar ────────────────────────────────────────────────────────────
     public async Task<Result> Guardar(Gasto gasto)
     {
-        bool existe = await Existe(gasto.GastoId);
+        if (gasto == null || string.IsNullOrWhiteSpace(gasto.Concepto))
+            return Result.Failure(ConceptoRequerido);
 
-        bool guardado = existe
-            ? await Modificar(gasto)
-            : await Insertar(gasto);
+        if (gasto.Monto <= 0)
+            return Result.Failure(MontoInvalido);
 
-        return Result.Success(guardado);
-    }
+        if (gasto.Concepto.Trim().Length > 250 ||
+            gasto.Categoria?.Length > 250 ||
+            gasto.MetodoPago?.Length > 250)
+        {
+            return Result.Failure(TextoMuyLargo);
+        }
 
-    // Verificar si el gasto existe
-    private async Task<bool> Existe(int gastoId)
-    {
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
-        return await contexto.Gastos
-            .AnyAsync(g => g.GastoId == gastoId);
+        // El usuario es opcional, pero si viene debe existir.
+        if (gasto.UsuarioId.HasValue)
+        {
+            bool usuarioExiste = await contexto.Usuarios
+                .AnyAsync(u => u.UsuarioId == gasto.UsuarioId.Value);
+
+            if (!usuarioExiste)
+                return Result.Failure(UsuarioNoExiste);
+        }
+
+        try
+        {
+            if (gasto.GastoId == 0)
+            {
+                // Se copian solo los campos propios del gasto. Así no se guarda
+                // por accidente el Usuario que venga anidado en el JSON.
+                // Si no viene fecha, se usa la actual (igual que el default de la base).
+                var nuevo = new Gasto
+                {
+                    Fecha = gasto.Fecha == default ? DateTime.Now : gasto.Fecha,
+                    Concepto = gasto.Concepto.Trim(),
+                    Categoria = gasto.Categoria?.Trim(),
+                    Monto = gasto.Monto,
+                    MetodoPago = gasto.MetodoPago?.Trim(),
+                    Observaciones = gasto.Observaciones?.Trim(),
+                    UsuarioId = gasto.UsuarioId
+                };
+
+                contexto.Gastos.Add(nuevo);
+            }
+            else
+            {
+                var existente = await contexto.Gastos
+                    .FirstOrDefaultAsync(g => g.GastoId == gasto.GastoId);
+
+                if (existente == null)
+                    return Result.Failure(GastoNoExiste);
+
+                // Si no viene fecha se conserva la que ya tenía (no se pisa con 01/01/0001).
+                if (gasto.Fecha != default)
+                    existente.Fecha = gasto.Fecha;
+
+                existente.Concepto = gasto.Concepto.Trim();
+                existente.Categoria = gasto.Categoria?.Trim();
+                existente.Monto = gasto.Monto;
+                existente.MetodoPago = gasto.MetodoPago?.Trim();
+                existente.Observaciones = gasto.Observaciones?.Trim();
+                existente.UsuarioId = gasto.UsuarioId;
+            }
+
+            await contexto.SaveChangesAsync();
+
+            // Si no cambió nada, SaveChanges devuelve 0 pero no es un error.
+            return Result.Success();
+        }
+        catch (DbUpdateException)
+        {
+            // Red de seguridad por si la base rechaza algo que no se validó arriba.
+            return Result.Failure(ErrorAlGuardar);
+        }
     }
 
-    // Insertar un gasto
-    private async Task<bool> Insertar(Gasto gasto)
-    {
-        await using var contexto = await contextFactory.CreateDbContextAsync();
-
-        contexto.Gastos.Add(gasto);
-
-        return await contexto.SaveChangesAsync() > 0;
-    }
-
-    // Modificar un gasto
-    private async Task<bool> Modificar(Gasto gasto)
-    {
-        await using var contexto = await contextFactory.CreateDbContextAsync();
-
-        contexto.Gastos.Update(gasto);
-
-        return await contexto.SaveChangesAsync() > 0;
-    }
-
+    // ── Consultas ──────────────────────────────────────────────────────────
     // Buscar gasto por ID
     public async Task<Result<Gasto?>> Buscar(int gastoId)
     {
@@ -65,25 +129,32 @@ public class GastosService(
     }
 
     // Buscar gastos de una fecha específica
-    public async Task<Result<List<Gasto>>> BuscarPorFecha(
-        DateTime fecha)
+    public async Task<Result<List<Gasto>>> BuscarPorFecha(DateTime fecha)
     {
         await using var contexto = await contextFactory.CreateDbContextAsync();
+
+        // Rango [inicio, fin) en vez de g.Fecha.Date: así la base puede usar índices
+        // y se comporta igual en SQL Server y SQLite.
+        DateTime inicio = fecha.Date;
+        DateTime fin = inicio.AddDays(1);
 
         var gastos = await contexto.Gastos
             .AsNoTracking()
             .Include(g => g.Usuario)
-            .Where(g => g.Fecha.Date == fecha.Date)
+            .Where(g => g.Fecha >= inicio && g.Fecha < fin)
             .ToListAsync();
 
         return Result<List<Gasto>>.Success(gastos);
     }
 
-    // Buscar gastos entre dos fechas
+    // Buscar gastos entre dos fechas (el día final se incluye completo)
     public async Task<Result<List<Gasto>>> BuscarPorRangoFechas(
         DateTime fechaInicio,
         DateTime fechaFin)
     {
+        if (fechaInicio.Date > fechaFin.Date)
+            return Result<List<Gasto>>.Success(new List<Gasto>());
+
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
         DateTime inicio = fechaInicio.Date;
@@ -113,15 +184,22 @@ public class GastosService(
         return Result<List<Gasto>>.Success(gastos);
     }
 
-    // Eliminar gasto por ID
+    // ── Eliminar ───────────────────────────────────────────────────────────
     public async Task<Result> Eliminar(int gastoId)
     {
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
-        bool eliminado = await contexto.Gastos
-            .Where(g => g.GastoId == gastoId)
-            .ExecuteDeleteAsync() > 0;
+        try
+        {
+            bool eliminado = await contexto.Gastos
+                .Where(g => g.GastoId == gastoId)
+                .ExecuteDeleteAsync() > 0;
 
-        return Result.Success(eliminado);
+            return eliminado ? Result.Success() : Result.Failure(GastoNoExiste);
+        }
+        catch (Exception ex) when (ex is DbUpdateException or DbException)
+        {
+            return Result.Failure(ErrorAlEliminar);
+        }
     }
 }

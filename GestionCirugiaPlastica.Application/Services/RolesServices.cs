@@ -2,10 +2,7 @@
 using GestionCirugiaPlastica.Infrastructure.Data;
 using GestionCirugiaPlastica.Infrastructure.Models;
 using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
 using System.Linq.Expressions;
-using System.Text;
 
 namespace GestionCirugiaPlastica.Application.Services;
 
@@ -15,72 +12,116 @@ public class RolesServices(
 {
     private const string RolAdministrador = "Administrador";
 
-    // 1. Guardar o actualizar un rol
+    // ── Errores ────────────────────────────────────────────────────────────
+    // Recuerda: Result.Success(false) NO es un fallo. Para fallar: Result.Failure(error).
+    private static readonly Error RolRequerido =
+        new("Rol.Requerido", "Debe enviar los datos del rol.");
+
+    private static readonly Error NombreRequerido =
+        new("Rol.NombreRequerido", "El nombre del rol es obligatorio.");
+
+    private static readonly Error NombreMuyLargo =
+        new("Rol.NombreMuyLargo", "El nombre del rol no puede pasar de 250 caracteres.");
+
+    private static readonly Error DescripcionMuyLarga =
+        new("Rol.DescripcionMuyLarga", "La descripción del rol no puede pasar de 250 caracteres.");
+
+    private static readonly Error NombreDuplicado =
+        new("Rol.NombreDuplicado", "Ya existe un rol con ese nombre.");
+
+    private static readonly Error RolNoExiste =
+        new("Rol.NoExiste", "El rol indicado no existe.");
+
+    private static readonly Error AdministradorNoRenombrable =
+        new("Rol.AdministradorNoRenombrable", "El rol Administrador no se puede renombrar.");
+
+    private static readonly Error AdministradorNoEliminable =
+        new("Rol.AdministradorNoEliminable", "El rol Administrador no se puede eliminar.");
+
+    private static readonly Error RolConUsuarios =
+        new("Rol.TieneUsuarios", "No se puede eliminar un rol que tiene usuarios asignados.");
+
+    private static readonly Error ErrorAlGuardar =
+        new("Rol.ErrorAlGuardar", "No se pudo guardar el rol.");
+
+    private static readonly Error ErrorAlEliminar =
+        new("Rol.ErrorAlEliminar", "No se pudo eliminar el rol.");
+
+    // ── Guardar ────────────────────────────────────────────────────────────
+    // Guardar o actualizar un rol
     public async Task<Result> Guardar(Role rol)
     {
-        if (rol == null ||
-            string.IsNullOrWhiteSpace(rol.Nombre) ||
-            rol.Nombre.Trim().Length > 250 ||
-            rol.Descripcion?.Length > 250)
-        {
-            return Result.Success(false);
-        }
+        if (rol == null)
+            return Result.Failure(RolRequerido);
+
+        if (string.IsNullOrWhiteSpace(rol.Nombre))
+            return Result.Failure(NombreRequerido);
+
+        if (rol.Nombre.Trim().Length > 250)
+            return Result.Failure(NombreMuyLargo);
+
+        if (rol.Descripcion?.Trim().Length > 250)
+            return Result.Failure(DescripcionMuyLarga);
 
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
         string nombre = rol.Nombre.Trim();
 
+        string? descripcion = string.IsNullOrWhiteSpace(rol.Descripcion)
+            ? null
+            : rol.Descripcion.Trim();
+
+        // El nombre es único (sin distinguir mayúsculas), excluyendo el propio registro.
         bool nombreExiste = await contexto.Roles
             .AnyAsync(r =>
                 r.Nombre.ToLower() == nombre.ToLower() &&
                 r.RolId != rol.RolId);
 
         if (nombreExiste)
-            return Result.Success(false);
+            return Result.Failure(NombreDuplicado);
 
-        if (rol.RolId == 0)
+        try
         {
-            var nuevoRol = new Role
+            if (rol.RolId == 0)
             {
-                Nombre = nombre,
-                Descripcion = rol.Descripcion?.Trim()
-            };
-
-            contexto.Roles.Add(nuevoRol);
-        }
-        else
-        {
-            var existente = await contexto.Roles
-                .FirstOrDefaultAsync(r => r.RolId == rol.RolId);
-
-            if (existente == null)
-                return Result.Success(false);
-
-            // No permitir cambiar el nombre del último rol administrador
-            if (existente.Nombre.Equals(
-                RolAdministrador,
-                StringComparison.OrdinalIgnoreCase) &&
-                !nombre.Equals(
-                RolAdministrador,
-                StringComparison.OrdinalIgnoreCase))
+                // Se copian solo los campos propios, así no se guardan por accidente
+                // los Usuarios que vengan anidados en el JSON.
+                contexto.Roles.Add(new Role
+                {
+                    Nombre = nombre,
+                    Descripcion = descripcion
+                });
+            }
+            else
             {
-                bool existeOtroAdministrador = await contexto.Roles
-                    .AnyAsync(r =>
-                        r.RolId != rol.RolId &&
-                        r.Nombre.ToLower() == "administrador");
+                var existente = await contexto.Roles
+                    .FirstOrDefaultAsync(r => r.RolId == rol.RolId);
 
-                if (!existeOtroAdministrador)
-                    return Result.Success(false);
+                if (existente == null)
+                    return Result.Failure(RolNoExiste);
+
+                // El rol Administrador no se renombra. Como el nombre es único,
+                // no puede existir otro rol Administrador que lo reemplace.
+                if (existente.Nombre.Equals(RolAdministrador, StringComparison.OrdinalIgnoreCase) &&
+                    !nombre.Equals(RolAdministrador, StringComparison.OrdinalIgnoreCase))
+                    return Result.Failure(AdministradorNoRenombrable);
+
+                existente.Nombre = nombre;
+                existente.Descripcion = descripcion;
             }
 
-            existente.Nombre = nombre;
-            existente.Descripcion = rol.Descripcion?.Trim();
-        }
+            await contexto.SaveChangesAsync();
 
-        return Result.Success(await contexto.SaveChangesAsync() > 0);
+            return Result.Success();
+        }
+        catch (DbUpdateException)
+        {
+            return Result.Failure(ErrorAlGuardar);
+        }
     }
 
-    // 2. Buscar rol por ID
+    // ── Consultas ──────────────────────────────────────────────────────────
+    // Buscar rol por ID
     public async Task<Result<Role?>> Buscar(int rolId)
     {
         await using var contexto = await contextFactory.CreateDbContextAsync();
@@ -92,7 +133,7 @@ public class RolesServices(
         return Result<Role?>.Success(rol);
     }
 
-    // 3. Obtener roles según un criterio
+    // Obtener roles según un criterio
     public async Task<Result<List<Role>>> GetList(
         Expression<Func<Role, bool>> criterio)
     {
@@ -107,7 +148,7 @@ public class RolesServices(
         return Result<List<Role>>.Success(roles);
     }
 
-    // 4. Buscar roles por nombre
+    // Buscar roles por nombre
     public async Task<Result<List<Role>>> BuscarPorNombre(string nombre)
     {
         if (string.IsNullOrWhiteSpace(nombre))
@@ -126,7 +167,7 @@ public class RolesServices(
         return Result<List<Role>>.Success(roles);
     }
 
-    // 5. Buscar el rol asignado a un usuario
+    // Buscar el rol asignado a un usuario
     public async Task<Result<Role?>> BuscarPorUsuario(int usuarioId)
     {
         if (usuarioId <= 0)
@@ -143,7 +184,7 @@ public class RolesServices(
         return Result<Role?>.Success(rol);
     }
 
-    // 6. Buscar usuarios pertenecientes a un rol
+    // Buscar usuarios pertenecientes a un rol (sin devolver la contraseña)
     public async Task<Result<List<Usuario>>> BuscarUsuarios(int rolId)
     {
         if (rolId <= 0)
@@ -156,6 +197,7 @@ public class RolesServices(
             .Where(u => u.RolId == rolId)
             .OrderBy(u => u.Nombre)
             .ThenBy(u => u.Apellido)
+            .ThenBy(u => u.UsuarioId)
             .Select(u => new Usuario
             {
                 UsuarioId = u.UsuarioId,
@@ -171,7 +213,7 @@ public class RolesServices(
         return Result<List<Usuario>>.Success(usuarios);
     }
 
-    // 7. Comprobar si un rol tiene usuarios asignados
+    // Comprobar si un rol tiene usuarios asignados
     public async Task<Result<bool>> TieneUsuarios(int rolId)
     {
         if (rolId <= 0)
@@ -185,7 +227,7 @@ public class RolesServices(
         return Result<bool>.Success(tieneUsuarios);
     }
 
-    // 8. Contar usuarios asignados a un rol
+    // Contar usuarios asignados a un rol
     public async Task<Result<int>> ContarUsuarios(int rolId)
     {
         if (rolId <= 0)
@@ -199,24 +241,27 @@ public class RolesServices(
         return Result<int>.Success(cantidad);
     }
 
-    // 9. Comprobar si existe otro administrador activo
+    // Comprobar si existe al menos un usuario administrador activo
     public async Task<Result<bool>> ExisteAdministradorActivo()
     {
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
+        string administrador = RolAdministrador.ToLower();
+
         bool existe = await contexto.Usuarios
             .AnyAsync(u =>
                 u.Activo &&
-                u.Rol.Nombre.ToLower() == "administrador");
+                u.Rol.Nombre.ToLower() == administrador);
 
         return Result<bool>.Success(existe);
     }
 
-    // 10. No permitir eliminar roles asignados o el último administrador
+    // ── Eliminar ───────────────────────────────────────────────────────────
+    // No se eliminan roles con usuarios asignados ni el rol Administrador.
     public async Task<Result> Eliminar(int rolId)
     {
         if (rolId <= 0)
-            return Result.Success(false);
+            return Result.Failure(RolNoExiste);
 
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
@@ -224,31 +269,27 @@ public class RolesServices(
             .FirstOrDefaultAsync(r => r.RolId == rolId);
 
         if (rol == null)
-            return Result.Success(false);
+            return Result.Failure(RolNoExiste);
+
+        if (rol.Nombre.Equals(RolAdministrador, StringComparison.OrdinalIgnoreCase))
+            return Result.Failure(AdministradorNoEliminable);
 
         bool tieneUsuarios = await contexto.Usuarios
             .AnyAsync(u => u.RolId == rolId);
 
         if (tieneUsuarios)
-            return Result.Success(false);
+            return Result.Failure(RolConUsuarios);
 
-        // Proteger el último rol administrador
-        if (rol.Nombre.Equals(
-            RolAdministrador,
-            StringComparison.OrdinalIgnoreCase))
+        try
         {
-            bool existeOtroAdministrador = await contexto.Usuarios
-                .AnyAsync(u =>
-                    u.Activo &&
-                    u.RolId != rolId &&
-                    u.Rol.Nombre.ToLower() == "administrador");
+            contexto.Roles.Remove(rol);
+            await contexto.SaveChangesAsync();
 
-            if (!existeOtroAdministrador)
-                return Result.Success(false);
+            return Result.Success();
         }
-
-        contexto.Roles.Remove(rol);
-
-        return Result.Success(await contexto.SaveChangesAsync() > 0);
+        catch (DbUpdateException)
+        {
+            return Result.Failure(ErrorAlEliminar);
+        }
     }
 }

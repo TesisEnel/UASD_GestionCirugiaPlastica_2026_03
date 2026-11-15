@@ -1,5 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
-using GestionCirugiaPlastica.Application.Services;
+﻿using GestionCirugiaPlastica.Application.Services;
 using GestionCirugiaPlastica.Infrastructure.Models;
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,82 +10,82 @@ public class RecetasController(
     RecetasServices recetasService
 ) : ControllerBase
 {
-    // Registrar o actualizar una receta
+    // POST: api/Recetas  (registrar o actualizar una receta)
     [HttpPost]
-    public async Task<IActionResult> Guardar(Receta receta)
+    public async Task<IActionResult> Guardar([FromBody] Receta receta)
     {
         var resultado = await recetasService.Guardar(receta);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
-    // Buscar receta por ID
+    // GET: api/Recetas/1
     [HttpGet("{id:int}")]
     public async Task<IActionResult> Buscar(int id)
     {
         var resultado = await recetasService.Buscar(id);
-        return Ok(resultado);
+
+        if (resultado.IsFailure)
+            return BadRequest(resultado);
+
+        return resultado.Value is null ? NotFound() : Ok(resultado);
     }
 
-    // Obtener todas las recetas
+    // GET: api/Recetas
     [HttpGet]
     public async Task<IActionResult> GetList()
     {
         var resultado = await recetasService.GetList(r => true);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
-    // Buscar recetas por paciente
+    // GET: api/Recetas/paciente/1
     [HttpGet("paciente/{pacienteId:int}")]
     public async Task<IActionResult> BuscarPorPaciente(int pacienteId)
     {
         var resultado = await recetasService.BuscarPorPaciente(pacienteId);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
-    // Buscar recetas por consulta
+    // GET: api/Recetas/consulta/1
     [HttpGet("consulta/{consultaId:int}")]
     public async Task<IActionResult> BuscarPorConsulta(int consultaId)
     {
         var resultado = await recetasService.BuscarPorConsulta(consultaId);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
-    // Buscar recetas por cirugía
+    // GET: api/Recetas/cirugia/1
     [HttpGet("cirugia/{cirugiaId:int}")]
     public async Task<IActionResult> BuscarPorCirugia(int cirugiaId)
     {
         var resultado = await recetasService.BuscarPorCirugia(cirugiaId);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
-    // Buscar recetas por usuario
+    // GET: api/Recetas/usuario/1
     [HttpGet("usuario/{usuarioId:int}")]
     public async Task<IActionResult> BuscarPorUsuario(int usuarioId)
     {
         var resultado = await recetasService.BuscarPorUsuario(usuarioId);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
-    // Buscar recetas por rango de fechas
+    // GET: api/Recetas/rango-fechas?fechaDesde=2026-03-01&fechaHasta=2026-03-31
     [HttpGet("rango-fechas")]
     public async Task<IActionResult> BuscarPorFecha(
         [FromQuery] DateTime fechaDesde,
         [FromQuery] DateTime fechaHasta)
     {
-        var resultado = await recetasService.BuscarPorFecha(
-            fechaDesde,
-            fechaHasta);
-
-        return Ok(resultado);
+        var resultado = await recetasService.BuscarPorFecha(fechaDesde, fechaHasta);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
-    // Buscar recetas por medicamento
+    // GET: api/Recetas/medicamento?medicamento=Ibuprofeno
     [HttpGet("medicamento")]
-    public async Task<IActionResult> BuscarPorMedicamento(
-        [FromQuery] string medicamento)
+    public async Task<IActionResult> BuscarPorMedicamento([FromQuery] string medicamento)
     {
         var resultado = await recetasService.BuscarPorMedicamento(medicamento);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 }
 

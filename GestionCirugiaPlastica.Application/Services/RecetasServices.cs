@@ -2,10 +2,7 @@
 using GestionCirugiaPlastica.Infrastructure.Data;
 using GestionCirugiaPlastica.Infrastructure.Models;
 using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
 using System.Linq.Expressions;
-using System.Text;
 
 namespace GestionCirugiaPlastica.Application.Services;
 
@@ -13,47 +10,96 @@ public class RecetasServices(
     IDbContextFactory<GestionCirugiaPlasticaContext> contextFactory
 ) : IServiceResult<Receta, int>
 {
-    // 1. Registrar o actualizar una receta
+    // ── Errores ────────────────────────────────────────────────────────────
+    // Recuerda: Result.Success(false) NO es un fallo. Para fallar: Result.Failure(error).
+    private static readonly Error RecetaRequerida =
+        new("Receta.Requerida", "Debe enviar los datos de la receta.");
+
+    private static readonly Error PacienteRequerido =
+        new("Receta.PacienteRequerido", "Debe indicar un paciente válido.");
+
+    private static readonly Error IndicacionesMuyLargas =
+        new("Receta.IndicacionesMuyLargas", "Las indicaciones no pueden pasar de 4000 caracteres.");
+
+    private static readonly Error DetallesRequeridos =
+        new("Receta.DetallesRequeridos", "La receta debe tener al menos un medicamento.");
+
+    private static readonly Error MedicamentoRequerido =
+        new("Receta.MedicamentoRequerido", "Cada medicamento debe tener nombre.");
+
+    private static readonly Error DetalleMuyLargo =
+        new("Receta.DetalleMuyLargo",
+            "El medicamento, la dosis, la frecuencia, la duración y las instrucciones no pueden pasar de 250 caracteres.");
+
+    private static readonly Error OrigenDuplicado =
+        new("Receta.OrigenDuplicado", "La receta no puede estar vinculada a una consulta y a una cirugía a la vez.");
+
+    private static readonly Error PacienteNoExiste =
+        new("Receta.PacienteNoExiste", "El paciente indicado no existe.");
+
+    private static readonly Error ConsultaInvalida =
+        new("Receta.ConsultaInvalida", "La consulta indicada no existe o no pertenece al paciente.");
+
+    private static readonly Error CirugiaInvalida =
+        new("Receta.CirugiaInvalida", "La cirugía indicada no existe o no pertenece al paciente.");
+
+    private static readonly Error UsuarioNoExiste =
+        new("Receta.UsuarioNoExiste", "El usuario indicado no existe.");
+
+    private static readonly Error RecetaNoExiste =
+        new("Receta.NoExiste", "La receta indicada no existe.");
+
+    private static readonly Error NoPuedeCambiarOrigen =
+        new("Receta.NoPuedeCambiarOrigen", "No se puede cambiar el paciente ni el origen de una receta existente.");
+
+    private static readonly Error DetalleNoExiste =
+        new("Receta.DetalleNoExiste", "Uno de los medicamentos indicados no pertenece a esta receta.");
+
+    private static readonly Error ErrorAlGuardar =
+        new("Receta.ErrorAlGuardar", "No se pudo guardar la receta.");
+
+    private static readonly Error EliminarNoPermitido =
+        new("Receta.EliminarNoPermitido", "No se permite eliminar recetas médicas.");
+
+    // ── Guardar ────────────────────────────────────────────────────────────
+    // Registrar o actualizar una receta
     public async Task<Result> Guardar(Receta receta)
     {
-        if (receta == null ||
-            receta.PacienteId <= 0 ||
-            receta.Indicaciones?.Length > 4000)
-        {
-            return Result.Success(false);
-        }
+        if (receta == null)
+            return Result.Failure(RecetaRequerida);
 
-        if (receta.DetallesReceta == null ||
-            !receta.DetallesReceta.Any() ||
-            receta.DetallesReceta.Any(d =>
-                string.IsNullOrWhiteSpace(d.Medicamento) ||
+        if (receta.PacienteId <= 0)
+            return Result.Failure(PacienteRequerido);
+
+        if (receta.Indicaciones?.Trim().Length > 4000)
+            return Result.Failure(IndicacionesMuyLargas);
+
+        if (receta.DetallesReceta == null || receta.DetallesReceta.Count == 0)
+            return Result.Failure(DetallesRequeridos);
+
+        if (receta.DetallesReceta.Any(d => string.IsNullOrWhiteSpace(d.Medicamento)))
+            return Result.Failure(MedicamentoRequerido);
+
+        if (receta.DetallesReceta.Any(d =>
                 d.Medicamento.Trim().Length > 250 ||
-                d.Dosis?.Length > 250 ||
-                d.Frecuencia?.Length > 250 ||
-                d.Duracion?.Length > 250 ||
-                d.Instrucciones?.Length > 250))
-        {
-            return Result.Success(false);
-        }
+                d.Dosis?.Trim().Length > 250 ||
+                d.Frecuencia?.Trim().Length > 250 ||
+                d.Duracion?.Trim().Length > 250 ||
+                d.Instrucciones?.Trim().Length > 250))
+            return Result.Failure(DetalleMuyLargo);
 
-        // Una receta no debe estar vinculada simultáneamente
-        // a una consulta y a una cirugía.
-        if (receta.ConsultaId.HasValue &&
-            receta.CirugiaId.HasValue)
-        {
-            return Result.Success(false);
-        }
+        // Una receta no debe estar vinculada simultáneamente a una consulta y a una cirugía.
+        if (receta.ConsultaId.HasValue && receta.CirugiaId.HasValue)
+            return Result.Failure(OrigenDuplicado);
 
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
-        // Comprobar que el paciente existe
         bool pacienteExiste = await contexto.Pacientes
             .AnyAsync(p => p.PacienteId == receta.PacienteId);
 
         if (!pacienteExiste)
-            return Result.Success(false);
+            return Result.Failure(PacienteNoExiste);
 
-        // Comprobar que la consulta pertenece al paciente
         if (receta.ConsultaId.HasValue)
         {
             bool consultaValida = await contexto.Consultas
@@ -62,10 +108,9 @@ public class RecetasServices(
                     c.PacienteId == receta.PacienteId);
 
             if (!consultaValida)
-                return Result.Success(false);
+                return Result.Failure(ConsultaInvalida);
         }
 
-        // Comprobar que la cirugía pertenece al paciente
         if (receta.CirugiaId.HasValue)
         {
             bool cirugiaValida = await contexto.Cirugias
@@ -74,102 +119,106 @@ public class RecetasServices(
                     c.PacienteId == receta.PacienteId);
 
             if (!cirugiaValida)
-                return Result.Success(false);
+                return Result.Failure(CirugiaInvalida);
         }
 
-        // Comprobar que el usuario existe
         if (receta.UsuarioId.HasValue)
         {
             bool usuarioExiste = await contexto.Usuarios
                 .AnyAsync(u => u.UsuarioId == receta.UsuarioId.Value);
 
             if (!usuarioExiste)
-                return Result.Success(false);
+                return Result.Failure(UsuarioNoExiste);
         }
 
-        if (receta.RecetaId == 0)
+        try
         {
-            // Crear una receta nueva
-            var nuevaReceta = new Receta
+            if (receta.RecetaId == 0)
             {
-                Fecha = DateTime.Now,
-                PacienteId = receta.PacienteId,
-                ConsultaId = receta.ConsultaId,
-                CirugiaId = receta.CirugiaId,
-                UsuarioId = receta.UsuarioId,
-                Indicaciones = receta.Indicaciones?.Trim(),
-
-                DetallesReceta = receta.DetallesReceta
-                    .Select(d => new DetallesReceta
-                    {
-                        Medicamento = d.Medicamento.Trim(),
-                        Dosis = d.Dosis?.Trim(),
-                        Frecuencia = d.Frecuencia?.Trim(),
-                        Duracion = d.Duracion?.Trim(),
-                        Instrucciones = d.Instrucciones?.Trim()
-                    }).ToList()
-            };
-
-            contexto.Recetas.Add(nuevaReceta);
-        }
-        else
-        {
-            // Buscar receta existente
-            var existente = await contexto.Recetas
-                .Include(r => r.DetallesReceta)
-                .FirstOrDefaultAsync(r =>
-                    r.RecetaId == receta.RecetaId);
-
-            if (existente == null)
-                return Result.Success(false);
-
-            // No permitir cambiar el paciente ni el origen de la receta
-            if (existente.PacienteId != receta.PacienteId ||
-                existente.ConsultaId != receta.ConsultaId ||
-                existente.CirugiaId != receta.CirugiaId)
-            {
-                return Result.Success(false);
+                // Se copian solo los campos propios, así no se guarda por accidente
+                // el Paciente, la Consulta, etc. que vengan anidados en el JSON.
+                contexto.Recetas.Add(new Receta
+                {
+                    Fecha = DateTime.Now,
+                    PacienteId = receta.PacienteId,
+                    ConsultaId = receta.ConsultaId,
+                    CirugiaId = receta.CirugiaId,
+                    UsuarioId = receta.UsuarioId,
+                    Indicaciones = receta.Indicaciones?.Trim(),
+                    DetallesReceta = receta.DetallesReceta
+                        .Select(NuevoDetalle)
+                        .ToList()
+                });
             }
-
-            existente.Indicaciones = receta.Indicaciones?.Trim();
-
-            // Actualizar o agregar medicamentos sin eliminar
-            // los detalles históricos que no vengan en la solicitud.
-            foreach (var detalle in receta.DetallesReceta)
+            else
             {
-                if (detalle.DetalleRecetaId == 0)
+                var existente = await contexto.Recetas
+                    .Include(r => r.DetallesReceta)
+                    .FirstOrDefaultAsync(r => r.RecetaId == receta.RecetaId);
+
+                if (existente == null)
+                    return Result.Failure(RecetaNoExiste);
+
+                // No permitir cambiar el paciente ni el origen de la receta.
+                if (existente.PacienteId != receta.PacienteId ||
+                    existente.ConsultaId != receta.ConsultaId ||
+                    existente.CirugiaId != receta.CirugiaId)
+                    return Result.Failure(NoPuedeCambiarOrigen);
+
+                // Se valida todo antes de tocar nada: si un detalle no pertenece
+                // a la receta, no se aplica ningún cambio.
+                bool hayDetalleAjeno = receta.DetallesReceta.Any(d =>
+                    d.DetalleRecetaId != 0 &&
+                    !existente.DetallesReceta.Any(x => x.DetalleRecetaId == d.DetalleRecetaId));
+
+                if (hayDetalleAjeno)
+                    return Result.Failure(DetalleNoExiste);
+
+                existente.Indicaciones = receta.Indicaciones?.Trim();
+
+                // Actualizar o agregar medicamentos, sin eliminar los detalles
+                // históricos que no vengan en la solicitud.
+                foreach (var detalle in receta.DetallesReceta)
                 {
-                    existente.DetallesReceta.Add(new DetallesReceta
+                    if (detalle.DetalleRecetaId == 0)
                     {
-                        Medicamento = detalle.Medicamento.Trim(),
-                        Dosis = detalle.Dosis?.Trim(),
-                        Frecuencia = detalle.Frecuencia?.Trim(),
-                        Duracion = detalle.Duracion?.Trim(),
-                        Instrucciones = detalle.Instrucciones?.Trim()
-                    });
-                }
-                else
-                {
-                    var detalleExistente = existente.DetallesReceta
-                        .FirstOrDefault(d =>
-                            d.DetalleRecetaId == detalle.DetalleRecetaId);
+                        existente.DetallesReceta.Add(NuevoDetalle(detalle));
+                    }
+                    else
+                    {
+                        var detalleExistente = existente.DetallesReceta
+                            .First(d => d.DetalleRecetaId == detalle.DetalleRecetaId);
 
-                    if (detalleExistente == null)
-                        return Result.Success(false);
-
-                    detalleExistente.Medicamento = detalle.Medicamento.Trim();
-                    detalleExistente.Dosis = detalle.Dosis?.Trim();
-                    detalleExistente.Frecuencia = detalle.Frecuencia?.Trim();
-                    detalleExistente.Duracion = detalle.Duracion?.Trim();
-                    detalleExistente.Instrucciones = detalle.Instrucciones?.Trim();
+                        detalleExistente.Medicamento = detalle.Medicamento.Trim();
+                        detalleExistente.Dosis = detalle.Dosis?.Trim();
+                        detalleExistente.Frecuencia = detalle.Frecuencia?.Trim();
+                        detalleExistente.Duracion = detalle.Duracion?.Trim();
+                        detalleExistente.Instrucciones = detalle.Instrucciones?.Trim();
+                    }
                 }
             }
-        }
 
-        return Result.Success(await contexto.SaveChangesAsync() > 0);
+            await contexto.SaveChangesAsync();
+
+            return Result.Success();
+        }
+        catch (DbUpdateException)
+        {
+            return Result.Failure(ErrorAlGuardar);
+        }
     }
 
-    // 2. Buscar receta por ID, incluyendo sus medicamentos
+    private static DetallesReceta NuevoDetalle(DetallesReceta d) => new()
+    {
+        Medicamento = d.Medicamento.Trim(),
+        Dosis = d.Dosis?.Trim(),
+        Frecuencia = d.Frecuencia?.Trim(),
+        Duracion = d.Duracion?.Trim(),
+        Instrucciones = d.Instrucciones?.Trim()
+    };
+
+    // ── Consultas ──────────────────────────────────────────────────────────
+    // Buscar receta por ID, incluyendo sus medicamentos
     public async Task<Result<Receta?>> Buscar(int recetaId)
     {
         await using var contexto = await contextFactory.CreateDbContextAsync();
@@ -179,10 +228,10 @@ public class RecetasServices(
             .Include(r => r.DetallesReceta)
             .FirstOrDefaultAsync(r => r.RecetaId == recetaId);
 
-        return Result<Receta?>.Success((Receta?)receta);
+        return Result<Receta?>.Success(receta);
     }
 
-    // 3. Obtener recetas según un criterio
+    // Obtener recetas según un criterio
     public async Task<Result<List<Receta>>> GetList(
         Expression<Func<Receta, bool>> criterio)
     {
@@ -199,79 +248,43 @@ public class RecetasServices(
         return Result<List<Receta>>.Success(recetas);
     }
 
-    // 4. Buscar recetas por paciente
+    // Buscar recetas por paciente
     public async Task<Result<List<Receta>>> BuscarPorPaciente(int pacienteId)
     {
         if (pacienteId <= 0)
             return Result<List<Receta>>.Success(new List<Receta>());
 
-        await using var contexto = await contextFactory.CreateDbContextAsync();
-
-        var recetas = await contexto.Recetas
-            .AsNoTracking()
-            .Include(r => r.DetallesReceta)
-            .Where(r => r.PacienteId == pacienteId)
-            .OrderByDescending(r => r.Fecha)
-            .ToListAsync();
-
-        return Result<List<Receta>>.Success(recetas);
+        return await GetList(r => r.PacienteId == pacienteId);
     }
 
-    // 5. Buscar recetas por consulta
+    // Buscar recetas por consulta
     public async Task<Result<List<Receta>>> BuscarPorConsulta(int consultaId)
     {
         if (consultaId <= 0)
             return Result<List<Receta>>.Success(new List<Receta>());
 
-        await using var contexto = await contextFactory.CreateDbContextAsync();
-
-        var recetas = await contexto.Recetas
-            .AsNoTracking()
-            .Include(r => r.DetallesReceta)
-            .Where(r => r.ConsultaId == consultaId)
-            .OrderByDescending(r => r.Fecha)
-            .ToListAsync();
-
-        return Result<List<Receta>>.Success(recetas);
+        return await GetList(r => r.ConsultaId == consultaId);
     }
 
-    // 6. Buscar recetas por cirugía
+    // Buscar recetas por cirugía
     public async Task<Result<List<Receta>>> BuscarPorCirugia(int cirugiaId)
     {
         if (cirugiaId <= 0)
             return Result<List<Receta>>.Success(new List<Receta>());
 
-        await using var contexto = await contextFactory.CreateDbContextAsync();
-
-        var recetas = await contexto.Recetas
-            .AsNoTracking()
-            .Include(r => r.DetallesReceta)
-            .Where(r => r.CirugiaId == cirugiaId)
-            .OrderByDescending(r => r.Fecha)
-            .ToListAsync();
-
-        return Result<List<Receta>>.Success(recetas);
+        return await GetList(r => r.CirugiaId == cirugiaId);
     }
 
-    // 7. Buscar recetas por usuario que las emitió
+    // Buscar recetas por usuario que las emitió
     public async Task<Result<List<Receta>>> BuscarPorUsuario(int usuarioId)
     {
         if (usuarioId <= 0)
             return Result<List<Receta>>.Success(new List<Receta>());
 
-        await using var contexto = await contextFactory.CreateDbContextAsync();
-
-        var recetas = await contexto.Recetas
-            .AsNoTracking()
-            .Include(r => r.DetallesReceta)
-            .Where(r => r.UsuarioId == usuarioId)
-            .OrderByDescending(r => r.Fecha)
-            .ToListAsync();
-
-        return Result<List<Receta>>.Success(recetas);
+        return await GetList(r => r.UsuarioId == usuarioId);
     }
 
-    // 8. Buscar recetas por rango de fechas
+    // Buscar recetas por rango de fechas (ambas incluidas)
     public async Task<Result<List<Receta>>> BuscarPorFecha(
         DateTime fechaDesde,
         DateTime fechaHasta)
@@ -279,46 +292,25 @@ public class RecetasServices(
         if (fechaDesde.Date > fechaHasta.Date)
             return Result<List<Receta>>.Success(new List<Receta>());
 
-        await using var contexto = await contextFactory.CreateDbContextAsync();
-
         DateTime desde = fechaDesde.Date;
         DateTime hasta = fechaHasta.Date.AddDays(1);
 
-        var recetas = await contexto.Recetas
-            .AsNoTracking()
-            .Include(r => r.DetallesReceta)
-            .Where(r => r.Fecha >= desde && r.Fecha < hasta)
-            .OrderByDescending(r => r.Fecha)
-            .ToListAsync();
-
-        return Result<List<Receta>>.Success(recetas);
+        return await GetList(r => r.Fecha >= desde && r.Fecha < hasta);
     }
 
-    // 9. Buscar recetas por medicamento
-    public async Task<Result<List<Receta>>> BuscarPorMedicamento(
-        string medicamento)
+    // Buscar recetas por medicamento
+    public async Task<Result<List<Receta>>> BuscarPorMedicamento(string medicamento)
     {
         if (string.IsNullOrWhiteSpace(medicamento))
             return Result<List<Receta>>.Success(new List<Receta>());
 
-        await using var contexto = await contextFactory.CreateDbContextAsync();
-
         medicamento = medicamento.Trim();
 
-        var recetas = await contexto.Recetas
-            .AsNoTracking()
-            .Include(r => r.DetallesReceta)
-            .Where(r => r.DetallesReceta.Any(d =>
-                d.Medicamento.Contains(medicamento)))
-            .OrderByDescending(r => r.Fecha)
-            .ToListAsync();
-
-        return Result<List<Receta>>.Success(recetas);
+        return await GetList(r => r.DetallesReceta.Any(d => d.Medicamento.Contains(medicamento)));
     }
 
-    // 10. No permitir eliminar recetas médicas
+    // ── Eliminar ───────────────────────────────────────────────────────────
+    // Las recetas médicas no se borran: se devuelve un fallo explícito.
     public Task<Result> Eliminar(int recetaId)
-    {
-        return Task.FromResult<Result>(Result.Success(false));
-    }
+        => Task.FromResult(Result.Failure(EliminarNoPermitido));
 }

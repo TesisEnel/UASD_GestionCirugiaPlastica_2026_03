@@ -1,5 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
-using GestionCirugiaPlastica.Application.Services;
+﻿using GestionCirugiaPlastica.Application.Services;
 using GestionCirugiaPlastica.Infrastructure.Models;
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,44 +10,47 @@ public class HistorialEstadosCitasController(
     HistorialEstadosCitasServices historialService
 ) : ControllerBase
 {
-    // Registrar un nuevo cambio de estado
+    // POST: api/HistorialEstadosCitas  (registrar un cambio de estado)
     [HttpPost]
-    public async Task<IActionResult> Guardar(HistorialEstadosCitas historial)
+    public async Task<IActionResult> Guardar([FromBody] HistorialEstadosCitas historial)
     {
         var resultado = await historialService.Guardar(historial);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
-    // Buscar un historial por su ID
+    // GET: api/HistorialEstadosCitas/1
     [HttpGet("{id:int}")]
     public async Task<IActionResult> Buscar(int id)
     {
         var resultado = await historialService.Buscar(id);
-        return Ok(resultado);
+
+        if (resultado.IsFailure)
+            return BadRequest(resultado);
+
+        return resultado.Value is null ? NotFound() : Ok(resultado);
     }
 
-    // Obtener todos los registros del historial
+    // GET: api/HistorialEstadosCitas
     [HttpGet]
     public async Task<IActionResult> GetList()
     {
         var resultado = await historialService.GetList(h => true);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
-    // Buscar historial de una cita específica
+    // GET: api/HistorialEstadosCitas/cita/1
     [HttpGet("cita/{citaId:int}")]
     public async Task<IActionResult> BuscarPorCita(int citaId)
     {
         var resultado = await historialService.BuscarPorCita(citaId);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
-    // Buscar historial realizado por un usuario
+    // GET: api/HistorialEstadosCitas/usuario/1
     [HttpGet("usuario/{usuarioId:int}")]
     public async Task<IActionResult> BuscarPorUsuario(int usuarioId)
     {
         var resultado = await historialService.BuscarPorUsuario(usuarioId);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 }
-

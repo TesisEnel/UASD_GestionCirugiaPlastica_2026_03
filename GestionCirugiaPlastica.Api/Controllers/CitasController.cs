@@ -28,7 +28,7 @@ public class CitasController : ControllerBase
     public async Task<IActionResult> Get(int id)
     {
         var resultado = await _citasService.Buscar(id);
-        return Ok(resultado);
+        return resultado.Value is null ? NotFound() : Ok(resultado);
     }
 
     // GET: api/Citas/buscar/nombre/María
@@ -52,7 +52,7 @@ public class CitasController : ControllerBase
     public async Task<IActionResult> Post([FromBody] Cita cita)
     {
         var resultado = await _citasService.Guardar(cita);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
     // DELETE: api/Citas/5
@@ -60,6 +60,6 @@ public class CitasController : ControllerBase
     public async Task<IActionResult> Delete(int id)
     {
         var resultado = await _citasService.Eliminar(id);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 }
