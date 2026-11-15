@@ -2,6 +2,7 @@
 using GestionCirugiaPlastica.Infrastructure.Data;
 using GestionCirugiaPlastica.Infrastructure.Models;
 using Microsoft.EntityFrameworkCore;
+using System.Data.Common;
 using System.Linq.Expressions;
 
 namespace GestionCirugiaPlastica.Application.Services;
@@ -10,47 +11,103 @@ public class HistorialClinicoService(
     IDbContextFactory<GestionCirugiaPlasticaContext> contextFactory
 ) : IServiceResult<HistorialClinico, int>
 {
-    // Registrar o modificar un historial clínico
+    // ── Errores ────────────────────────────────────────────────────────────
+    // Recuerda: Result.Success(false) NO es un fallo. Para fallar: Result.Failure(error).
+    private static readonly Error PacienteRequerido =
+        new("Historial.PacienteRequerido", "Debe indicar un paciente válido.");
+
+    private static readonly Error PacienteNoExiste =
+        new("Historial.PacienteNoExiste", "El paciente indicado no existe.");
+
+    private static readonly Error HistorialDuplicado =
+        new("Historial.Duplicado", "Ese paciente ya tiene un historial clínico.");
+
+    private static readonly Error HistorialNoExiste =
+        new("Historial.NoExiste", "El historial indicado no existe.");
+
+    private static readonly Error PacienteNoPuedeCambiar =
+        new("Historial.PacienteNoPuedeCambiar", "Un historial no se puede pasar a otro paciente.");
+
+    private static readonly Error ErrorAlGuardar =
+        new("Historial.ErrorAlGuardar", "No se pudo guardar el historial clínico.");
+
+    private static readonly Error ErrorAlEliminar =
+        new("Historial.ErrorAlEliminar", "No se pudo eliminar el historial clínico.");
+
+    // ── Guardar ────────────────────────────────────────────────────────────
     public async Task<Result> Guardar(HistorialClinico historial)
     {
-        bool existe = await Existe(historial.HistoriaId);
+        if (historial == null || historial.PacienteId <= 0)
+            return Result.Failure(PacienteRequerido);
 
-        bool guardado = existe
-            ? await Modificar(historial)
-            : await Insertar(historial);
-
-        return Result.Success(guardado);
-    }
-
-    // Verificar si el historial existe
-    private async Task<bool> Existe(int historiaId)
-    {
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
-        return await contexto.HistorialClinicos
-            .AnyAsync(h => h.HistoriaId == historiaId);
+        // El paciente debe existir.
+        bool pacienteExiste = await contexto.Pacientes
+            .AnyAsync(p => p.PacienteId == historial.PacienteId);
+
+        if (!pacienteExiste)
+            return Result.Failure(PacienteNoExiste);
+
+        // Un paciente solo puede tener UN historial (índice único sobre PacienteId).
+        // Se excluye el propio historial para poder editarlo.
+        bool yaTieneHistorial = await contexto.HistorialClinicos
+            .AnyAsync(h => h.PacienteId == historial.PacienteId
+                        && h.HistoriaId != historial.HistoriaId);
+
+        if (yaTieneHistorial)
+            return Result.Failure(HistorialDuplicado);
+
+        try
+        {
+            if (historial.HistoriaId == 0)
+            {
+                // Se copian solo los campos propios del historial. Así no se guarda
+                // por accidente el Paciente que venga anidado en el JSON.
+                var nuevo = new HistorialClinico
+                {
+                    PacienteId = historial.PacienteId,
+                    FechaActualizacion = DateTime.Now,
+                    Antecedentes = historial.Antecedentes?.Trim(),
+                    Alergias = historial.Alergias?.Trim(),
+                    Medicamentos = historial.Medicamentos?.Trim(),
+                    NotasMedicas = historial.NotasMedicas?.Trim()
+                };
+
+                contexto.HistorialClinicos.Add(nuevo);
+            }
+            else
+            {
+                var existente = await contexto.HistorialClinicos
+                    .FirstOrDefaultAsync(h => h.HistoriaId == historial.HistoriaId);
+
+                if (existente == null)
+                    return Result.Failure(HistorialNoExiste);
+
+                if (existente.PacienteId != historial.PacienteId)
+                    return Result.Failure(PacienteNoPuedeCambiar);
+
+                // FechaActualizacion = última vez que se modificó: la pone el servidor,
+                // no el cliente.
+                existente.FechaActualizacion = DateTime.Now;
+                existente.Antecedentes = historial.Antecedentes?.Trim();
+                existente.Alergias = historial.Alergias?.Trim();
+                existente.Medicamentos = historial.Medicamentos?.Trim();
+                existente.NotasMedicas = historial.NotasMedicas?.Trim();
+            }
+
+            await contexto.SaveChangesAsync();
+
+            return Result.Success();
+        }
+        catch (DbUpdateException)
+        {
+            // Por si dos peticiones simultáneas pasan la validación de duplicado a la vez.
+            return Result.Failure(ErrorAlGuardar);
+        }
     }
 
-    // Insertar historial clínico
-    private async Task<bool> Insertar(HistorialClinico historial)
-    {
-        await using var contexto = await contextFactory.CreateDbContextAsync();
-
-        contexto.HistorialClinicos.Add(historial);
-
-        return await contexto.SaveChangesAsync() > 0;
-    }
-
-    // Modificar historial clínico
-    private async Task<bool> Modificar(HistorialClinico historial)
-    {
-        await using var contexto = await contextFactory.CreateDbContextAsync();
-
-        contexto.HistorialClinicos.Update(historial);
-
-        return await contexto.SaveChangesAsync() > 0;
-    }
-
+    // ── Consultas ──────────────────────────────────────────────────────────
     // Buscar historial por ID
     public async Task<Result<HistorialClinico?>> Buscar(int historiaId)
     {
@@ -111,15 +168,22 @@ public class HistorialClinicoService(
         return Result<List<HistorialClinico>>.Success(historiales);
     }
 
-    // Eliminar historial por ID
+    // ── Eliminar ───────────────────────────────────────────────────────────
     public async Task<Result> Eliminar(int historiaId)
     {
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
-        bool eliminado = await contexto.HistorialClinicos
-            .Where(h => h.HistoriaId == historiaId)
-            .ExecuteDeleteAsync() > 0;
+        try
+        {
+            bool eliminado = await contexto.HistorialClinicos
+                .Where(h => h.HistoriaId == historiaId)
+                .ExecuteDeleteAsync() > 0;
 
-        return Result.Success(eliminado);
+            return eliminado ? Result.Success() : Result.Failure(HistorialNoExiste);
+        }
+        catch (Exception ex) when (ex is DbUpdateException or DbException)
+        {
+            return Result.Failure(ErrorAlEliminar);
+        }
     }
 }

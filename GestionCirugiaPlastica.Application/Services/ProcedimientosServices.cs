@@ -2,10 +2,8 @@
 using GestionCirugiaPlastica.Infrastructure.Data;
 using GestionCirugiaPlastica.Infrastructure.Models;
 using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
+using System.Data.Common;
 using System.Linq.Expressions;
-using System.Text;
 
 namespace GestionCirugiaPlastica.Application.Services;
 
@@ -13,79 +11,119 @@ public class ProcedimientosServices(
     IDbContextFactory<GestionCirugiaPlasticaContext> contextFactory
 ) : IServiceResult<Procedimiento, int>
 {
-    // 1. Guardar o actualizar un procedimiento
+    // ── Errores ────────────────────────────────────────────────────────────
+    // Recuerda: Result.Success(false) NO es un fallo. Para fallar: Result.Failure(error).
+    private static readonly Error ProcedimientoRequerido =
+        new("Procedimiento.Requerido", "Debe enviar los datos del procedimiento.");
+
+    private static readonly Error NombreRequerido =
+        new("Procedimiento.NombreRequerido", "El nombre del procedimiento es obligatorio.");
+
+    private static readonly Error NombreMuyLargo =
+        new("Procedimiento.NombreMuyLargo", "El nombre del procedimiento no puede pasar de 250 caracteres.");
+
+    private static readonly Error PrecioInvalido =
+        new("Procedimiento.PrecioInvalido", "El precio base no puede ser negativo.");
+
+    private static readonly Error NombreDuplicado =
+        new("Procedimiento.NombreDuplicado", "Ya existe un procedimiento con ese nombre.");
+
+    private static readonly Error ProcedimientoNoExiste =
+        new("Procedimiento.NoExiste", "El procedimiento indicado no existe.");
+
+    private static readonly Error TieneCirugias =
+        new("Procedimiento.TieneCirugias", "No se puede eliminar un procedimiento que tiene cirugías asociadas.");
+
+    private static readonly Error ErrorAlGuardar =
+        new("Procedimiento.ErrorAlGuardar", "No se pudo guardar el procedimiento.");
+
+    private static readonly Error ErrorAlEliminar =
+        new("Procedimiento.ErrorAlEliminar", "No se pudo eliminar el procedimiento.");
+
+    // ── Guardar ────────────────────────────────────────────────────────────
+    // Guardar o actualizar un procedimiento
     public async Task<Result> Guardar(Procedimiento procedimiento)
     {
-        if (procedimiento == null ||
-            string.IsNullOrWhiteSpace(procedimiento.Nombre) ||
-            procedimiento.Nombre.Trim().Length > 250 ||
-            procedimiento.PrecioBase < 0)
-        {
-            return Result.Success(false);
-        }
+        if (procedimiento == null)
+            return Result.Failure(ProcedimientoRequerido);
+
+        if (string.IsNullOrWhiteSpace(procedimiento.Nombre))
+            return Result.Failure(NombreRequerido);
+
+        if (procedimiento.Nombre.Trim().Length > 250)
+            return Result.Failure(NombreMuyLargo);
+
+        if (procedimiento.PrecioBase < 0)
+            return Result.Failure(PrecioInvalido);
 
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
         string nombre = procedimiento.Nombre.Trim();
 
-        // Evitar nombres duplicados
+        // Evitar nombres duplicados (sin distinguir mayúsculas), excluyendo el propio registro.
         bool nombreExiste = await contexto.Procedimientos
             .AnyAsync(p =>
                 p.Nombre.ToLower() == nombre.ToLower() &&
                 p.ProcedimientoId != procedimiento.ProcedimientoId);
 
         if (nombreExiste)
-            return Result.Success(false);
+            return Result.Failure(NombreDuplicado);
 
-        if (procedimiento.ProcedimientoId == 0)
+        string? descripcion = string.IsNullOrWhiteSpace(procedimiento.Descripcion)
+            ? null
+            : procedimiento.Descripcion.Trim();
+
+        try
         {
-            var nuevoProcedimiento = new Procedimiento
+            if (procedimiento.ProcedimientoId == 0)
             {
-                Nombre = nombre,
-                Descripcion = string.IsNullOrWhiteSpace(procedimiento.Descripcion)
-                    ? null
-                    : procedimiento.Descripcion.Trim(),
-                PrecioBase = procedimiento.PrecioBase
-            };
+                // Se copian solo los campos propios, así no se guardan por accidente
+                // las Cirugías que vengan anidadas en el JSON.
+                contexto.Procedimientos.Add(new Procedimiento
+                {
+                    FechaRegistro = DateTime.Now,
+                    Nombre = nombre,
+                    Descripcion = descripcion,
+                    PrecioBase = procedimiento.PrecioBase
+                });
+            }
+            else
+            {
+                var existente = await contexto.Procedimientos
+                    .FirstOrDefaultAsync(p => p.ProcedimientoId == procedimiento.ProcedimientoId);
 
-            contexto.Procedimientos.Add(nuevoProcedimiento);
+                if (existente == null)
+                    return Result.Failure(ProcedimientoNoExiste);
+
+                existente.Nombre = nombre;
+                existente.Descripcion = descripcion;
+                existente.PrecioBase = procedimiento.PrecioBase;
+            }
+
+            await contexto.SaveChangesAsync();
+
+            return Result.Success();
         }
-        else
+        catch (DbUpdateException)
         {
-            var existente = await contexto.Procedimientos
-                .FirstOrDefaultAsync(p =>
-                    p.ProcedimientoId == procedimiento.ProcedimientoId);
-
-            if (existente == null)
-                return Result.Success(false);
-
-            existente.Nombre = nombre;
-
-            existente.Descripcion =
-                string.IsNullOrWhiteSpace(procedimiento.Descripcion)
-                    ? null
-                    : procedimiento.Descripcion.Trim();
-
-            existente.PrecioBase = procedimiento.PrecioBase;
+            return Result.Failure(ErrorAlGuardar);
         }
-
-        return Result.Success(await contexto.SaveChangesAsync() > 0);
     }
 
-    // 2. Buscar procedimiento por ID
+    // ── Consultas ──────────────────────────────────────────────────────────
+    // Buscar procedimiento por ID
     public async Task<Result<Procedimiento?>> Buscar(int procedimientoId)
     {
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
         var procedimiento = await contexto.Procedimientos
             .AsNoTracking()
-            .FirstOrDefaultAsync(p =>
-                p.ProcedimientoId == procedimientoId);
+            .FirstOrDefaultAsync(p => p.ProcedimientoId == procedimientoId);
 
         return Result<Procedimiento?>.Success(procedimiento);
     }
 
-    // 3. Obtener procedimientos según un criterio
+    // Obtener procedimientos según un criterio
     public async Task<Result<List<Procedimiento>>> GetList(
         Expression<Func<Procedimiento, bool>> criterio)
     {
@@ -100,14 +138,11 @@ public class ProcedimientosServices(
         return Result<List<Procedimiento>>.Success(procedimientos);
     }
 
-    // 4. Buscar procedimientos por nombre
+    // Buscar procedimientos por nombre
     public async Task<Result<List<Procedimiento>>> BuscarPorNombre(string nombre)
     {
         if (string.IsNullOrWhiteSpace(nombre))
-        {
-            return Result<List<Procedimiento>>.Success(
-                new List<Procedimiento>());
-        }
+            return Result<List<Procedimiento>>.Success(new List<Procedimiento>());
 
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
@@ -122,31 +157,27 @@ public class ProcedimientosServices(
         return Result<List<Procedimiento>>.Success(procedimientos);
     }
 
-    // 5. Buscar procedimientos por rango de precios
+    // Buscar procedimientos por rango de precios (ambos extremos incluidos)
     public async Task<Result<List<Procedimiento>>> BuscarPorRangoPrecio(
         decimal precioMinimo,
         decimal precioMaximo)
     {
         if (precioMinimo < 0 || precioMaximo < precioMinimo)
-        {
-            return Result<List<Procedimiento>>.Success(
-                new List<Procedimiento>());
-        }
+            return Result<List<Procedimiento>>.Success(new List<Procedimiento>());
 
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
         var procedimientos = await contexto.Procedimientos
             .AsNoTracking()
-            .Where(p =>
-                p.PrecioBase >= precioMinimo &&
-                p.PrecioBase <= precioMaximo)
+            .Where(p => p.PrecioBase >= precioMinimo && p.PrecioBase <= precioMaximo)
             .OrderBy(p => p.PrecioBase)
+            .ThenBy(p => p.Nombre)
             .ToListAsync();
 
         return Result<List<Procedimiento>>.Success(procedimientos);
     }
 
-    // 6. Buscar procedimientos utilizados en una cirugía
+    // Buscar el procedimiento utilizado en una cirugía
     public async Task<Result<Procedimiento?>> BuscarPorCirugia(int cirugiaId)
     {
         if (cirugiaId <= 0)
@@ -156,17 +187,17 @@ public class ProcedimientosServices(
 
         var procedimiento = await contexto.Procedimientos
             .AsNoTracking()
-            .FirstOrDefaultAsync(p =>
-                p.Cirugia.Any(c => c.CirugiaId == cirugiaId));
+            .FirstOrDefaultAsync(p => p.Cirugia.Any(c => c.CirugiaId == cirugiaId));
 
         return Result<Procedimiento?>.Success(procedimiento);
     }
 
-    // 7. Eliminar procedimiento si no tiene cirugías asociadas
+    // ── Eliminar ───────────────────────────────────────────────────────────
+    // Solo se elimina si no tiene cirugías asociadas.
     public async Task<Result> Eliminar(int procedimientoId)
     {
         if (procedimientoId <= 0)
-            return Result.Success(false);
+            return Result.Failure(ProcedimientoNoExiste);
 
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
@@ -174,18 +205,25 @@ public class ProcedimientosServices(
             .AnyAsync(p => p.ProcedimientoId == procedimientoId);
 
         if (!existe)
-            return Result.Success(false);
+            return Result.Failure(ProcedimientoNoExiste);
 
         bool tieneCirugias = await contexto.Cirugias
             .AnyAsync(c => c.ProcedimientoId == procedimientoId);
 
         if (tieneCirugias)
-            return Result.Success(false);
+            return Result.Failure(TieneCirugias);
 
-        int eliminados = await contexto.Procedimientos
-            .Where(p => p.ProcedimientoId == procedimientoId)
-            .ExecuteDeleteAsync();
+        try
+        {
+            bool eliminado = await contexto.Procedimientos
+                .Where(p => p.ProcedimientoId == procedimientoId)
+                .ExecuteDeleteAsync() > 0;
 
-        return Result.Success(eliminados > 0);
+            return eliminado ? Result.Success() : Result.Failure(ProcedimientoNoExiste);
+        }
+        catch (Exception ex) when (ex is DbUpdateException or DbException)
+        {
+            return Result.Failure(ErrorAlEliminar);
+        }
     }
 }

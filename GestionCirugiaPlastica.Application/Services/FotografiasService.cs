@@ -1,8 +1,8 @@
-﻿
-using Aplicada1.Core;
+﻿using Aplicada1.Core;
 using GestionCirugiaPlastica.Infrastructure.Data;
 using GestionCirugiaPlastica.Infrastructure.Models;
 using Microsoft.EntityFrameworkCore;
+using System.Data.Common;
 using System.Linq.Expressions;
 
 namespace GestionCirugiaPlastica.Application.Services;
@@ -11,43 +11,103 @@ public class FotografiasService(
     IDbContextFactory<GestionCirugiaPlasticaContext> contextFactory
 ) : IServiceResult<Fotografia, int>
 {
+    // ── Errores ────────────────────────────────────────────────────────────
+    // Recuerda: Result.Success(false) NO es un fallo. Para fallar: Result.Failure(error).
+    private static readonly Error CirugiaRequerida =
+        new("Fotografia.CirugiaRequerida", "Debe indicar una cirugía válida.");
+
+    private static readonly Error CirugiaNoExiste =
+        new("Fotografia.CirugiaNoExiste", "La cirugía indicada no existe.");
+
+    private static readonly Error RutaRequerida =
+        new("Fotografia.RutaRequerida", "La ruta del archivo es obligatoria.");
+
+    private static readonly Error TextoMuyLargo =
+        new("Fotografia.TextoMuyLargo", "Ruta, tipo y descripción no pueden pasar de 250 caracteres.");
+
+    private static readonly Error FotografiaNoExiste =
+        new("Fotografia.NoExiste", "La fotografía indicada no existe.");
+
+    private static readonly Error ErrorAlGuardar =
+        new("Fotografia.ErrorAlGuardar", "No se pudo guardar la fotografía.");
+
+    private static readonly Error ErrorAlEliminar =
+        new("Fotografia.ErrorAlEliminar", "No se pudo eliminar la fotografía.");
+
+    // ── Guardar ────────────────────────────────────────────────────────────
     public async Task<Result> Guardar(Fotografia fotografia)
     {
-        bool existe = await Existe(fotografia.FotografiaId);
+        if (fotografia == null || fotografia.CirugiaId <= 0)
+            return Result.Failure(CirugiaRequerida);
 
-        bool guardado = existe
-            ? await Modificar(fotografia)
-            : await Insertar(fotografia);
+        if (string.IsNullOrWhiteSpace(fotografia.RutaArchivo))
+            return Result.Failure(RutaRequerida);
 
-        return Result.Success(guardado);
-    }
+        if (fotografia.RutaArchivo.Trim().Length > 250 ||
+            fotografia.Tipo?.Length > 250 ||
+            fotografia.Descripcion?.Length > 250)
+        {
+            return Result.Failure(TextoMuyLargo);
+        }
 
-    private async Task<bool> Existe(int fotografiaId)
-    {
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
-        return await contexto.Fotografias
-            .AnyAsync(f => f.FotografiaId == fotografiaId);
+        // La cirugía debe existir.
+        bool cirugiaExiste = await contexto.Cirugias
+            .AnyAsync(c => c.CirugiaId == fotografia.CirugiaId);
+
+        if (!cirugiaExiste)
+            return Result.Failure(CirugiaNoExiste);
+
+        try
+        {
+            if (fotografia.FotografiaId == 0)
+            {
+                // Se copian solo los campos propios de la fotografía. Así no se guarda
+                // por accidente la Cirugía que venga anidada en el JSON.
+                // Si no viene fecha, se usa la actual (igual que el default de la base).
+                var nueva = new Fotografia
+                {
+                    Fecha = fotografia.Fecha == default ? DateTime.Now : fotografia.Fecha,
+                    CirugiaId = fotografia.CirugiaId,
+                    Tipo = fotografia.Tipo?.Trim(),
+                    RutaArchivo = fotografia.RutaArchivo.Trim(),
+                    Descripcion = fotografia.Descripcion?.Trim()
+                };
+
+                contexto.Fotografias.Add(nueva);
+            }
+            else
+            {
+                var existente = await contexto.Fotografias
+                    .FirstOrDefaultAsync(f => f.FotografiaId == fotografia.FotografiaId);
+
+                if (existente == null)
+                    return Result.Failure(FotografiaNoExiste);
+
+                // Si no viene fecha se conserva la que ya tenía (no se pisa con 01/01/0001).
+                if (fotografia.Fecha != default)
+                    existente.Fecha = fotografia.Fecha;
+
+                existente.CirugiaId = fotografia.CirugiaId;
+                existente.Tipo = fotografia.Tipo?.Trim();
+                existente.RutaArchivo = fotografia.RutaArchivo.Trim();
+                existente.Descripcion = fotografia.Descripcion?.Trim();
+            }
+
+            await contexto.SaveChangesAsync();
+
+            // Si no cambió nada, SaveChanges devuelve 0 pero no es un error.
+            return Result.Success();
+        }
+        catch (DbUpdateException)
+        {
+            // Red de seguridad por si la base rechaza algo que no se validó arriba.
+            return Result.Failure(ErrorAlGuardar);
+        }
     }
 
-    private async Task<bool> Insertar(Fotografia fotografia)
-    {
-        await using var contexto = await contextFactory.CreateDbContextAsync();
-
-        contexto.Fotografias.Add(fotografia);
-
-        return await contexto.SaveChangesAsync() > 0;
-    }
-
-    private async Task<bool> Modificar(Fotografia fotografia)
-    {
-        await using var contexto = await contextFactory.CreateDbContextAsync();
-
-        contexto.Fotografias.Update(fotografia);
-
-        return await contexto.SaveChangesAsync() > 0;
-    }
-
+    // ── Consultas ──────────────────────────────────────────────────────────
     // Buscar por ID
     public async Task<Result<Fotografia?>> Buscar(int fotografiaId)
     {
@@ -120,15 +180,24 @@ public class FotografiasService(
         return Result<List<Fotografia>>.Success(fotografias);
     }
 
-    // Eliminar por ID
+    // ── Eliminar ───────────────────────────────────────────────────────────
+    // OJO: solo borra el registro de la base de datos. El archivo físico en disco
+    // (RutaArchivo) no se toca; si hay que borrarlo, hazlo en la capa que lo guarda.
     public async Task<Result> Eliminar(int fotografiaId)
     {
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
-        bool eliminado = await contexto.Fotografias
-            .Where(f => f.FotografiaId == fotografiaId)
-            .ExecuteDeleteAsync() > 0;
+        try
+        {
+            bool eliminado = await contexto.Fotografias
+                .Where(f => f.FotografiaId == fotografiaId)
+                .ExecuteDeleteAsync() > 0;
 
-        return Result.Success(eliminado);
+            return eliminado ? Result.Success() : Result.Failure(FotografiaNoExiste);
+        }
+        catch (Exception ex) when (ex is DbUpdateException or DbException)
+        {
+            return Result.Failure(ErrorAlEliminar);
+        }
     }
 }

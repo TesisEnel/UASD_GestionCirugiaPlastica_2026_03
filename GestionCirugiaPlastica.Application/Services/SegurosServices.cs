@@ -2,10 +2,7 @@
 using GestionCirugiaPlastica.Infrastructure.Data;
 using GestionCirugiaPlastica.Infrastructure.Models;
 using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
 using System.Linq.Expressions;
-using System.Text;
 
 namespace GestionCirugiaPlastica.Application.Services;
 
@@ -13,17 +10,69 @@ public class SegurosServices(
     IDbContextFactory<GestionCirugiaPlasticaContext> contextFactory
 ) : IServiceResult<Seguro, int>
 {
+    // ── Errores ────────────────────────────────────────────────────────────
+    // Recuerda: Result.Success(false) NO es un fallo. Para fallar: Result.Failure(error).
+    private static readonly Error NombreRequerido =
+        new("Seguro.NombreRequerido", "El nombre de la aseguradora es obligatorio.");
+
+    private static readonly Error TextoMuyLargo =
+        new("Seguro.TextoMuyLargo", "Los textos no pueden pasar de 250 caracteres.");
+
+    private static readonly Error NombreDuplicado =
+        new("Seguro.NombreDuplicado", "Ya existe una aseguradora con ese nombre.");
+
+    private static readonly Error SeguroNoExiste =
+        new("Seguro.NoExiste", "La aseguradora indicada no existe.");
+
+    private static readonly Error SeguroInactivo =
+        new("Seguro.Inactivo", "La aseguradora no existe o está inactiva.");
+
+    private static readonly Error YaEstaActivo =
+        new("Seguro.YaActivo", "La aseguradora ya está activa.");
+
+    private static readonly Error YaEstaInactivo =
+        new("Seguro.YaInactivo", "La aseguradora ya está inactiva.");
+
+    private static readonly Error NoSeEliminan =
+        new("Seguro.NoSeElimina", "Las aseguradoras no se eliminan para conservar el historial de pólizas.");
+
+    private static readonly Error PolizaInvalida =
+        new("Poliza.Invalida", "Debe indicar un paciente y una aseguradora válidos.");
+
+    private static readonly Error PolizaVencida =
+        new("Poliza.FechaVencida", "La fecha de vencimiento no puede ser anterior a hoy.");
+
+    private static readonly Error PacienteNoExiste =
+        new("Poliza.PacienteNoExiste", "El paciente indicado no existe.");
+
+    private static readonly Error PolizaDuplicada =
+        new("Poliza.Duplicada", "Ese paciente ya tiene registrada esa póliza.");
+
+    private static readonly Error PolizaNoExiste =
+        new("Poliza.NoExiste", "La póliza indicada no existe.");
+
+    private static readonly Error PolizaNoPuedeCambiar =
+        new("Poliza.NoPuedeCambiar", "No se puede cambiar el paciente ni la aseguradora de una póliza.");
+
+    private static readonly Error ErrorAlGuardar =
+        new("Seguro.ErrorAlGuardar", "No se pudo guardar. Verifique que no esté duplicado.");
+
+    // Devuelve null si el texto viene vacío o en blanco.
+    private static string? Limpiar(string? texto) =>
+        string.IsNullOrWhiteSpace(texto) ? null : texto.Trim();
+
     // 1. Guardar o actualizar una aseguradora
     public async Task<Result> Guardar(Seguro seguro)
     {
-        if (seguro == null ||
-            string.IsNullOrWhiteSpace(seguro.Nombre) ||
-            seguro.Nombre.Trim().Length > 250 ||
+        if (seguro == null || string.IsNullOrWhiteSpace(seguro.Nombre))
+            return Result.Failure(NombreRequerido);
+
+        if (seguro.Nombre.Trim().Length > 250 ||
             seguro.Telefono?.Length > 250 ||
             seguro.Email?.Length > 250 ||
             seguro.Direccion?.Length > 250)
         {
-            return Result.Success(false);
+            return Result.Failure(TextoMuyLargo);
         }
 
         await using var contexto = await contextFactory.CreateDbContextAsync();
@@ -36,39 +85,45 @@ public class SegurosServices(
                 s.SeguroId != seguro.SeguroId);
 
         if (nombreExiste)
-            return Result.Success(false);
+            return Result.Failure(NombreDuplicado);
 
-        if (seguro.SeguroId == 0)
+        try
         {
-            var nuevoSeguro = new Seguro
+            if (seguro.SeguroId == 0)
             {
-                FechaRegistro = DateTime.Now,
-                Nombre = nombre,
-                Telefono = seguro.Telefono?.Trim(),
-                Email = seguro.Email?.Trim(),
-                Direccion = seguro.Direccion?.Trim(),
-                Activo = true
-            };
+                contexto.Seguros.Add(new Seguro
+                {
+                    FechaRegistro = DateTime.Now,
+                    Nombre = nombre,
+                    Telefono = Limpiar(seguro.Telefono),
+                    Email = Limpiar(seguro.Email),
+                    Direccion = Limpiar(seguro.Direccion),
+                    Activo = true
+                });
+            }
+            else
+            {
+                var existente = await contexto.Seguros
+                    .FirstOrDefaultAsync(s => s.SeguroId == seguro.SeguroId);
 
-            contexto.Seguros.Add(nuevoSeguro);
+                if (existente == null)
+                    return Result.Failure(SeguroNoExiste);
+
+                existente.Nombre = nombre;
+                existente.Telefono = Limpiar(seguro.Telefono);
+                existente.Email = Limpiar(seguro.Email);
+                existente.Direccion = Limpiar(seguro.Direccion);
+
+                // El estado Activo se modifica mediante Desactivar o Activar.
+            }
+
+            await contexto.SaveChangesAsync();
+            return Result.Success();
         }
-        else
+        catch (DbUpdateException)
         {
-            var existente = await contexto.Seguros
-                .FirstOrDefaultAsync(s => s.SeguroId == seguro.SeguroId);
-
-            if (existente == null)
-                return Result.Success(false);
-
-            existente.Nombre = nombre;
-            existente.Telefono = seguro.Telefono?.Trim();
-            existente.Email = seguro.Email?.Trim();
-            existente.Direccion = seguro.Direccion?.Trim();
-
-            // El estado Activo se modifica mediante Desactivar o Activar.
+            return Result.Failure(ErrorAlGuardar);
         }
-
-        return Result.Success(await contexto.SaveChangesAsync() > 0);
     }
 
     // 2. Buscar aseguradora por ID
@@ -136,8 +191,7 @@ public class SegurosServices(
         int pacienteId)
     {
         if (pacienteId <= 0)
-            return Result<List<PacienteSeguro>>.Success(
-                new List<PacienteSeguro>());
+            return Result<List<PacienteSeguro>>.Success(new List<PacienteSeguro>());
 
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
@@ -156,8 +210,7 @@ public class SegurosServices(
         int seguroId)
     {
         if (seguroId <= 0)
-            return Result<List<PacienteSeguro>>.Success(
-                new List<PacienteSeguro>());
+            return Result<List<PacienteSeguro>>.Success(new List<PacienteSeguro>());
 
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
@@ -178,18 +231,23 @@ public class SegurosServices(
     {
         if (pacienteSeguro == null ||
             pacienteSeguro.PacienteId <= 0 ||
-            pacienteSeguro.SeguroId <= 0 ||
-            pacienteSeguro.NumeroPoliza?.Length > 250 ||
+            pacienteSeguro.SeguroId <= 0)
+        {
+            return Result.Failure(PolizaInvalida);
+        }
+
+        if (pacienteSeguro.NumeroPoliza?.Length > 250 ||
             pacienteSeguro.Titular?.Length > 250 ||
             pacienteSeguro.Observaciones?.Length > 250)
         {
-            return Result.Success(false);
+            return Result.Failure(TextoMuyLargo);
         }
 
+        // Una póliza NUEVA no puede nacer ya vencida.
         if (pacienteSeguro.FechaVencimiento.HasValue &&
             pacienteSeguro.FechaVencimiento.Value < DateOnly.FromDateTime(DateTime.Today))
         {
-            return Result.Success(false);
+            return Result.Failure(PolizaVencida);
         }
 
         await using var contexto = await contextFactory.CreateDbContextAsync();
@@ -198,21 +256,19 @@ public class SegurosServices(
             .AnyAsync(p => p.PacienteId == pacienteSeguro.PacienteId);
 
         if (!pacienteExiste)
-            return Result.Success(false);
+            return Result.Failure(PacienteNoExiste);
 
         bool seguroValido = await contexto.Seguros
-            .AnyAsync(s =>
-                s.SeguroId == pacienteSeguro.SeguroId &&
-                s.Activo);
+            .AnyAsync(s => s.SeguroId == pacienteSeguro.SeguroId && s.Activo);
 
         if (!seguroValido)
-            return Result.Success(false);
+            return Result.Failure(SeguroInactivo);
 
         // Evitar registrar dos veces la misma póliza
-        if (!string.IsNullOrWhiteSpace(pacienteSeguro.NumeroPoliza))
-        {
-            string numero = pacienteSeguro.NumeroPoliza.Trim();
+        string? numero = Limpiar(pacienteSeguro.NumeroPoliza);
 
+        if (numero != null)
+        {
             bool duplicada = await contexto.PacienteSeguros
                 .AnyAsync(ps =>
                     ps.PacienteId == pacienteSeguro.PacienteId &&
@@ -220,23 +276,29 @@ public class SegurosServices(
                     ps.NumeroPoliza == numero);
 
             if (duplicada)
-                return Result.Success(false);
+                return Result.Failure(PolizaDuplicada);
         }
 
-        var nuevaPoliza = new PacienteSeguro
+        try
         {
-            FechaRegistro = DateTime.Now,
-            PacienteId = pacienteSeguro.PacienteId,
-            SeguroId = pacienteSeguro.SeguroId,
-            NumeroPoliza = pacienteSeguro.NumeroPoliza?.Trim(),
-            Titular = pacienteSeguro.Titular?.Trim(),
-            FechaVencimiento = pacienteSeguro.FechaVencimiento,
-            Observaciones = pacienteSeguro.Observaciones?.Trim()
-        };
+            contexto.PacienteSeguros.Add(new PacienteSeguro
+            {
+                FechaRegistro = DateTime.Now,
+                PacienteId = pacienteSeguro.PacienteId,
+                SeguroId = pacienteSeguro.SeguroId,
+                NumeroPoliza = numero,
+                Titular = Limpiar(pacienteSeguro.Titular),
+                FechaVencimiento = pacienteSeguro.FechaVencimiento,
+                Observaciones = Limpiar(pacienteSeguro.Observaciones)
+            });
 
-        contexto.PacienteSeguros.Add(nuevaPoliza);
-
-        return Result.Success(await contexto.SaveChangesAsync() > 0);
+            await contexto.SaveChangesAsync();
+            return Result.Success();
+        }
+        catch (DbUpdateException)
+        {
+            return Result.Failure(ErrorAlGuardar);
+        }
     }
 
     // 9. Actualizar una póliza existente
@@ -246,18 +308,16 @@ public class SegurosServices(
         if (pacienteSeguro == null ||
             pacienteSeguro.PacienteSeguroId <= 0 ||
             pacienteSeguro.PacienteId <= 0 ||
-            pacienteSeguro.SeguroId <= 0 ||
-            pacienteSeguro.NumeroPoliza?.Length > 250 ||
+            pacienteSeguro.SeguroId <= 0)
+        {
+            return Result.Failure(PolizaInvalida);
+        }
+
+        if (pacienteSeguro.NumeroPoliza?.Length > 250 ||
             pacienteSeguro.Titular?.Length > 250 ||
             pacienteSeguro.Observaciones?.Length > 250)
         {
-            return Result.Success(false);
-        }
-
-        if (pacienteSeguro.FechaVencimiento.HasValue &&
-            pacienteSeguro.FechaVencimiento.Value < DateOnly.FromDateTime(DateTime.Today))
-        {
-            return Result.Success(false);
+            return Result.Failure(TextoMuyLargo);
         }
 
         await using var contexto = await contextFactory.CreateDbContextAsync();
@@ -267,19 +327,29 @@ public class SegurosServices(
                 ps.PacienteSeguroId == pacienteSeguro.PacienteSeguroId);
 
         if (existente == null)
-            return Result.Success(false);
+            return Result.Failure(PolizaNoExiste);
 
         // No permitir cambiar el paciente ni la aseguradora
         if (existente.PacienteId != pacienteSeguro.PacienteId ||
             existente.SeguroId != pacienteSeguro.SeguroId)
         {
-            return Result.Success(false);
+            return Result.Failure(PolizaNoPuedeCambiar);
         }
 
-        if (!string.IsNullOrWhiteSpace(pacienteSeguro.NumeroPoliza))
+        // Solo se valida la fecha si CAMBIÓ. Antes se rechazaba siempre que fuera
+        // pasada, y una póliza ya vencida no se podía editar (ni su titular ni sus
+        // observaciones) aunque la fecha no se tocara.
+        if (pacienteSeguro.FechaVencimiento.HasValue &&
+            pacienteSeguro.FechaVencimiento != existente.FechaVencimiento &&
+            pacienteSeguro.FechaVencimiento.Value < DateOnly.FromDateTime(DateTime.Today))
         {
-            string numero = pacienteSeguro.NumeroPoliza.Trim();
+            return Result.Failure(PolizaVencida);
+        }
 
+        string? numero = Limpiar(pacienteSeguro.NumeroPoliza);
+
+        if (numero != null)
+        {
             bool duplicada = await contexto.PacienteSeguros
                 .AnyAsync(ps =>
                     ps.PacienteSeguroId != pacienteSeguro.PacienteSeguroId &&
@@ -288,15 +358,23 @@ public class SegurosServices(
                     ps.NumeroPoliza == numero);
 
             if (duplicada)
-                return Result.Success(false);
+                return Result.Failure(PolizaDuplicada);
         }
 
-        existente.NumeroPoliza = pacienteSeguro.NumeroPoliza?.Trim();
-        existente.Titular = pacienteSeguro.Titular?.Trim();
-        existente.FechaVencimiento = pacienteSeguro.FechaVencimiento;
-        existente.Observaciones = pacienteSeguro.Observaciones?.Trim();
+        try
+        {
+            existente.NumeroPoliza = numero;
+            existente.Titular = Limpiar(pacienteSeguro.Titular);
+            existente.FechaVencimiento = pacienteSeguro.FechaVencimiento;
+            existente.Observaciones = Limpiar(pacienteSeguro.Observaciones);
 
-        return Result.Success(await contexto.SaveChangesAsync() > 0);
+            await contexto.SaveChangesAsync();
+            return Result.Success();
+        }
+        catch (DbUpdateException)
+        {
+            return Result.Failure(ErrorAlGuardar);
+        }
     }
 
     // 10. Buscar póliza por ID
@@ -339,8 +417,7 @@ public class SegurosServices(
         int diasAnticipacion = 30)
     {
         if (diasAnticipacion < 0 || diasAnticipacion > 365)
-            return Result<List<PacienteSeguro>>.Success(
-                new List<PacienteSeguro>());
+            return Result<List<PacienteSeguro>>.Success(new List<PacienteSeguro>());
 
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
@@ -364,45 +441,44 @@ public class SegurosServices(
     // 13. Desactivar una aseguradora
     public async Task<Result> Desactivar(int seguroId)
     {
-        if (seguroId <= 0)
-            return Result.Success(false);
-
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
         var seguro = await contexto.Seguros
             .FirstOrDefaultAsync(s => s.SeguroId == seguroId);
 
-        if (seguro == null || !seguro.Activo)
-            return Result.Success(false);
+        if (seguro == null)
+            return Result.Failure(SeguroNoExiste);
+
+        if (!seguro.Activo)
+            return Result.Failure(YaEstaInactivo);
 
         seguro.Activo = false;
-
-        return Result.Success(await contexto.SaveChangesAsync() > 0);
+        await contexto.SaveChangesAsync();
+        return Result.Success();
     }
 
     // 14. Reactivar una aseguradora
     public async Task<Result> Activar(int seguroId)
     {
-        if (seguroId <= 0)
-            return Result.Success(false);
-
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
         var seguro = await contexto.Seguros
             .FirstOrDefaultAsync(s => s.SeguroId == seguroId);
 
-        if (seguro == null || seguro.Activo)
-            return Result.Success(false);
+        if (seguro == null)
+            return Result.Failure(SeguroNoExiste);
+
+        if (seguro.Activo)
+            return Result.Failure(YaEstaActivo);
 
         seguro.Activo = true;
-
-        return Result.Success(await contexto.SaveChangesAsync() > 0);
+        await contexto.SaveChangesAsync();
+        return Result.Success();
     }
 
-    // 15. No permitir eliminar aseguradoras
-    // para conservar el historial de pólizas
+    // 15. No permitir eliminar aseguradoras para conservar el historial de pólizas
     public Task<Result> Eliminar(int seguroId)
     {
-        return Task.FromResult<Result>(Result.Success(false));
+        return Task.FromResult(Result.Failure(NoSeEliminan));
     }
 }

@@ -1,5 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
-using GestionCirugiaPlastica.Application.Services;
+﻿using GestionCirugiaPlastica.Application.Services;
 using GestionCirugiaPlastica.Infrastructure.Models;
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,66 +10,69 @@ public class ProcedimientosController(
     ProcedimientosServices procedimientosService
 ) : ControllerBase
 {
-    // Registrar o actualizar un procedimiento
+    // POST: api/Procedimientos  (registrar o actualizar un procedimiento)
     [HttpPost]
-    public async Task<IActionResult> Guardar(Procedimiento procedimiento)
+    public async Task<IActionResult> Guardar([FromBody] Procedimiento procedimiento)
     {
         var resultado = await procedimientosService.Guardar(procedimiento);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
-    // Buscar procedimiento por ID
+    // GET: api/Procedimientos/1
     [HttpGet("{id:int}")]
     public async Task<IActionResult> Buscar(int id)
     {
         var resultado = await procedimientosService.Buscar(id);
-        return Ok(resultado);
+
+        if (resultado.IsFailure)
+            return BadRequest(resultado);
+
+        return resultado.Value is null ? NotFound() : Ok(resultado);
     }
 
-    // Obtener todos los procedimientos
+    // GET: api/Procedimientos
     [HttpGet]
     public async Task<IActionResult> GetList()
     {
         var resultado = await procedimientosService.GetList(p => true);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
-    // Buscar procedimientos por nombre
+    // GET: api/Procedimientos/nombre?nombre=plastia
     [HttpGet("nombre")]
-    public async Task<IActionResult> BuscarPorNombre(
-        [FromQuery] string nombre)
+    public async Task<IActionResult> BuscarPorNombre([FromQuery] string nombre)
     {
         var resultado = await procedimientosService.BuscarPorNombre(nombre);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
-    // Buscar procedimientos por rango de precios
+    // GET: api/Procedimientos/rango-precio?precioMinimo=10000&precioMaximo=50000
     [HttpGet("rango-precio")]
     public async Task<IActionResult> BuscarPorRangoPrecio(
         [FromQuery] decimal precioMinimo,
         [FromQuery] decimal precioMaximo)
     {
-        var resultado = await procedimientosService.BuscarPorRangoPrecio(
-            precioMinimo,
-            precioMaximo);
-
-        return Ok(resultado);
+        var resultado = await procedimientosService.BuscarPorRangoPrecio(precioMinimo, precioMaximo);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
-    // Buscar procedimiento utilizado en una cirugía
+    // GET: api/Procedimientos/cirugia/1  (procedimiento usado en esa cirugía)
     [HttpGet("cirugia/{cirugiaId:int}")]
     public async Task<IActionResult> BuscarPorCirugia(int cirugiaId)
     {
         var resultado = await procedimientosService.BuscarPorCirugia(cirugiaId);
-        return Ok(resultado);
+
+        if (resultado.IsFailure)
+            return BadRequest(resultado);
+
+        return resultado.Value is null ? NotFound() : Ok(resultado);
     }
 
-    // Eliminar procedimiento
+    // DELETE: api/Procedimientos/1
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Eliminar(int id)
     {
         var resultado = await procedimientosService.Eliminar(id);
-        return Ok(resultado);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 }
-

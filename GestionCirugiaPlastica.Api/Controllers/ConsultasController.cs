@@ -6,60 +6,57 @@ namespace GestionCirugiaPlastica.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class ConsultasController : ControllerBase
+public class ConsultasController(ConsultasService consultasService) : ControllerBase
 {
-    private readonly ConsultasService _consultasService;
-
-    public ConsultasController(ConsultasService consultasService)
-    {
-        _consultasService = consultasService;
-    }
-
     // GET: api/Consultas
     [HttpGet]
     public async Task<IActionResult> Get()
     {
-        var resultado = await _consultasService.GetList(c => true);
-        return Ok(resultado);
+        var resultado = await consultasService.GetList(c => true);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
     // GET: api/Consultas/1
     [HttpGet("{id:int}")]
     public async Task<IActionResult> Get(int id)
     {
-        var resultado = await _consultasService.Buscar(id);
-        return Ok(resultado);
+        var resultado = await consultasService.Buscar(id);
+
+        if (resultado.IsFailure)
+            return BadRequest(resultado);
+
+        return resultado.Value is null ? NotFound() : Ok(resultado);
     }
 
     // GET: api/Consultas/buscar/nombre/María
     [HttpGet("buscar/nombre/{nombre}")]
     public async Task<IActionResult> BuscarPorNombre(string nombre)
     {
-        var resultado = await _consultasService.BuscarPorNombre(nombre);
-        return Ok(resultado);
+        var resultado = await consultasService.BuscarPorNombre(nombre);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
     // GET: api/Consultas/buscar/cedula/00000000000
     [HttpGet("buscar/cedula/{cedula}")]
     public async Task<IActionResult> BuscarPorCedula(string cedula)
     {
-        var resultado = await _consultasService.BuscarPorCedula(cedula);
-        return Ok(resultado);
+        var resultado = await consultasService.BuscarPorCedula(cedula);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
     // POST: api/Consultas
     [HttpPost]
     public async Task<IActionResult> Post([FromBody] Consulta consulta)
     {
-        var resultado = await _consultasService.Guardar(consulta);
-        return Ok(resultado);
+        var resultado = await consultasService.Guardar(consulta);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
     // DELETE: api/Consultas/1
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
-        var resultado = await _consultasService.Eliminar(id);
-        return Ok(resultado);
+        var resultado = await consultasService.Eliminar(id);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 }
