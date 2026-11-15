@@ -1,103 +1,462 @@
-﻿@code {
-    // Lista temporal de citas de ejemplo
-    private List<AppointmentItem> AppointmentList = new()
-    {
-        new AppointmentItem
-        {
-            Patient = "María Reyes",
-            Type = "Consulta",
-            Date = new DateTime(2026, 11, 14),
-            Time = new TimeOnly(9, 0),
-            Status = "Confirmada"
-        },
-        new AppointmentItem
-        {
-            Patient = "Laura Castillo",
-            Type = "Evaluación",
-            Date = new DateTime(2026, 11, 14),
-            Time = new TimeOnly(10, 30),
-            Status = "Pendiente"
-        },
-        new AppointmentItem
-        {
-            Patient = "Ana Pérez",
-            Type = "Cirugía",
-            Date = new DateTime(2026, 11, 15),
-            Time = new TimeOnly(12, 0),
-            Status = "Confirmada"
-        },
-        new AppointmentItem
-        {
-            Patient = "Carolina López",
-            Type = "Seguimiento",
-            Date = new DateTime(2026, 11, 16),
-            Time = new TimeOnly(14, 0),
-            Status = "Cancelada"
-        }
-    };
+﻿@page "/citas"
+@using System.Net.Http.Json
+@inject HttpClient Http
 
-    // Variables del formulario
-    private bool ShowForm = false;
-    private string NewPatient = "";
+<PageTitle>Citas | Tanger Clinic</PageTitle>
+
+<div class="appointments-page">
+
+    <!-- ENCABEZADO -->
+    <div class="appointments-header">
+        <div>
+            <h2>Gestión de citas</h2>
+            <p>Administra las citas y consultas de tus pacientes.</p>
+        </div>
+
+        <button class="btn-primary-custom" @onclick="ToggleForm">
+            @(ShowForm ? "Cerrar formulario" : "+ Nueva cita")
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+    {
+        <div class="alert alert-danger">@ErrorMessage</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(SuccessMessage))
+    {
+        <div class="alert alert-success">@SuccessMessage</div>
+    }
+
+    <!-- ESTADÍSTICAS -->
+    <div class="appointment-stats">
+
+        <div class="appointment-stat-card">
+            <div class="appointment-stat-icon">📅</div>
+            <div>
+                <h3>@AppointmentList.Count</h3>
+                <p>Total de citas</p>
+            </div>
+        </div>
+
+        <div class="appointment-stat-card">
+            <div class="appointment-stat-icon">✓</div>
+            <div>
+                <h3>@AppointmentList.Count(a => a.Status == "Confirmada")</h3>
+                <p>Confirmadas</p>
+            </div>
+        </div>
+
+        <div class="appointment-stat-card">
+            <div class="appointment-stat-icon">◷</div>
+            <div>
+                <h3>@AppointmentList.Count(a => a.Status == "Pendiente")</h3>
+                <p>Pendientes</p>
+            </div>
+        </div>
+
+        <div class="appointment-stat-card">
+            <div class="appointment-stat-icon">×</div>
+            <div>
+                <h3>@AppointmentList.Count(a => a.Status == "Cancelada")</h3>
+                <p>Canceladas</p>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- FORMULARIO DE NUEVA CITA -->
+    @if (ShowForm)
+    {
+        <div class="appointments-panel appointment-form">
+
+            <h3>Nueva cita</h3>
+
+            @if (Patients.Count == 0)
+            {
+                <p>
+                    No hay pacientes registrados.
+                    Registra primero un paciente para poder crear una cita.
+                </p>
+            }
+            else
+            {
+                <div class="appointment-form-group">
+                    <label>Paciente</label>
+
+                    <select class="form-select" @bind="NewPatientId">
+                        <option value="0">Selecciona un paciente</option>
+
+                        @foreach (var patient in Patients)
+                        {
+                            <option value="@patient.PacienteId">
+                                @patient.Nombre @patient.Apellido
+                            </option>
+                        }
+                    </select>
+                </div>
+
+                <div class="appointment-form-group">
+                    <label>Tipo de cita</label>
+
+                    <select class="form-select" @bind="NewType">
+                        <option value="">Selecciona el tipo</option>
+                        <option value="Consulta">Consulta</option>
+                        <option value="Evaluación">Evaluación</option>
+                        <option value="Cirugía">Cirugía</option>
+                        <option value="Seguimiento">Seguimiento</option>
+                        <option value="Postoperatorio">Postoperatorio</option>
+                    </select>
+                </div>
+
+                <div class="appointment-form-group">
+                    <label>Fecha</label>
+
+                    <input type="date"
+                           class="form-control"
+                           @bind="NewDate"
+                           @bind:format="yyyy-MM-dd" />
+                </div>
+
+                <div class="appointment-form-group">
+                    <label>Hora</label>
+
+                    <input type="time"
+                           class="form-control"
+                           @bind="NewTime"
+                           @bind:format="HH:mm" />
+                </div>
+
+                <div class="appointment-form-group">
+                    <label>Costo (RD$)</label>
+
+                    <input type="number"
+                           class="form-control"
+                           min="0"
+                           step="0.01"
+                           @bind="NewCost" />
+                </div>
+
+                <div class="appointment-form-group appointment-form-full">
+                    <label>Observaciones</label>
+
+                    <textarea class="form-control"
+                              rows="3"
+                              @bind="NewObservations">
+                    </textarea>
+                </div>
+
+                <div class="appointment-actions">
+
+                    <button class="btn-primary-custom"
+                            @onclick="SaveAppointment"
+                            disabled="@IsSaving">
+
+                        @(IsSaving ? "Guardando..." : "Guardar cita")
+
+                    </button>
+
+                    <button class="btn-secondary-custom"
+                            @onclick="ToggleForm">
+                        Cancelar
+                    </button>
+
+                </div>
+            }
+
+        </div>
+    }
+
+    <!-- LISTADO DE CITAS -->
+    <div class="appointments-panel">
+
+        <div class="appointments-toolbar">
+
+            <input class="appointments-search"
+                   type="search"
+                   placeholder="Buscar paciente..."
+                   @bind="SearchText"
+                   @bind:event="oninput" />
+
+            <select class="form-select"
+                    style="max-width: 180px;"
+                    @bind="SelectedStatus">
+
+                <option value="Todas">Todos los estados</option>
+                <option value="Confirmada">Confirmadas</option>
+                <option value="Pendiente">Pendientes</option>
+                <option value="Cancelada">Canceladas</option>
+                <option value="Completada">Completadas</option>
+
+            </select>
+
+        </div>
+
+        @if (IsLoading)
+        {
+            <p>Cargando citas...</p>
+        }
+        else if (FilteredAppointments.Count == 0)
+        {
+            <p>No hay citas para mostrar.</p>
+        }
+        else
+        {
+            <div class="appointments-table-container">
+
+                <table class="appointments-table">
+
+                    <thead>
+                        <tr>
+                            <th>Paciente</th>
+                            <th>Tipo de cita</th>
+                            <th>Fecha</th>
+                            <th>Hora</th>
+                            <th>Costo</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        @foreach (var appointment in FilteredAppointments)
+                        {
+                            <tr>
+                                <td>@appointment.Patient</td>
+
+                                <td>@appointment.Type</td>
+
+                                <td>
+                                    @appointment.Date.ToString("dd/MM/yyyy")
+                                </td>
+
+                                <td>
+                                    @appointment.Date.ToString("hh:mm tt")
+                                </td>
+
+                                <td>
+                                    RD$ @appointment.Cost.ToString("N2")
+                                </td>
+
+                                <td>
+                                    <span class="appointment-status @GetStatusClass(appointment.Status)">
+                                        @appointment.Status
+                                    </span>
+                                </td>
+                            </tr>
+                        }
+
+                    </tbody>
+
+                </table>
+
+            </div>
+        }
+
+    </div>
+
+</div>
+
+@code {
+
+    // LISTAS
+    private List<AppointmentItem> AppointmentList = new();
+    private List<PatientItem> Patients = new();
+
+    // ESTADOS
+    private bool ShowForm;
+    private bool IsLoading = true;
+    private bool IsSaving;
+
+    // FORMULARIO
+    private int NewPatientId;
     private string NewType = "";
+
     private DateTime NewDate = DateTime.Today;
     private TimeOnly NewTime = new TimeOnly(9, 0);
 
-    // Variables de búsqueda y filtrado
+    private decimal NewCost;
+    private string NewObservations = "";
+
+    // BÚSQUEDA Y FILTROS
     private string SearchText = "";
     private string SelectedStatus = "Todas";
 
-    // Lista de citas filtradas
-    private IEnumerable<AppointmentItem> FilteredAppointments =>
-        AppointmentList
-            .Where(a => a.Patient.Contains(SearchText, StringComparison.OrdinalIgnoreCase))
-            .Where(a => SelectedStatus == "Todas" || a.Status == SelectedStatus)
-            .OrderBy(a => a.Date)
-            .ThenBy(a => a.Time);
+    // MENSAJES
+    private string ErrorMessage = "";
+    private string SuccessMessage = "";
 
-    // Mostrar u ocultar el formulario
+    // CITAS FILTRADAS
+    private List<AppointmentItem> FilteredAppointments =>
+        AppointmentList
+            .Where(a => a.Patient.Contains(
+                SearchText ?? "",
+                StringComparison.OrdinalIgnoreCase))
+            .Where(a => SelectedStatus == "Todas" ||
+                        a.Status == SelectedStatus)
+            .OrderBy(a => a.Date)
+            .ToList();
+
+    // INICIALIZACIÓN
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPatients();
+        await LoadAppointments();
+    }
+
+    // CARGAR PACIENTES DESDE LA API
+    private async Task LoadPatients()
+    {
+        try
+        {
+            var response =
+                await Http.GetFromJsonAsync<ApiResult<List<PatientItem>>>(
+                    "api/Pacientes");
+
+            Patients = response?.Value ?? new();
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage =
+                "No fue posible cargar los pacientes: " + ex.Message;
+        }
+    }
+
+    // CARGAR CITAS DESDE LA API
+    private async Task LoadAppointments()
+    {
+        IsLoading = true;
+
+        try
+        {
+            var response =
+                await Http.GetFromJsonAsync<ApiResult<List<AppointmentDto>>>(
+                    "api/Citas");
+
+            AppointmentList = (response?.Value ?? new())
+                .Select(c => new AppointmentItem
+                {
+                    Patient = c.Paciente != null
+                        ? $"{c.Paciente.Nombre} {c.Paciente.Apellido}"
+                        : "Paciente #" + c.PacienteId,
+
+                    Type = c.TipoCita ?? "Sin especificar",
+
+                    Date = c.Fecha,
+
+                    Status = c.Estado,
+
+                    Cost = c.Costo
+                })
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage =
+                "No fue posible cargar las citas: " + ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    // MOSTRAR U OCULTAR FORMULARIO
     private void ToggleForm()
     {
         ShowForm = !ShowForm;
+        ErrorMessage = "";
+        SuccessMessage = "";
     }
 
-    // Guardar una nueva cita
-    private void SaveAppointment()
+    // GUARDAR UNA CITA
+    private async Task SaveAppointment()
     {
-        if (string.IsNullOrWhiteSpace(NewPatient) ||
+        ErrorMessage = "";
+        SuccessMessage = "";
+
+        if (NewPatientId <= 0 ||
             string.IsNullOrWhiteSpace(NewType))
         {
+            ErrorMessage =
+                "Selecciona un paciente y el tipo de cita.";
             return;
         }
 
-        AppointmentList.Add(new AppointmentItem
+        if (NewCost < 0)
         {
-            Patient = NewPatient.Trim(),
-            Type = NewType,
-            Date = NewDate,
-            Time = NewTime,
-            Status = "Pendiente"
-        });
+            ErrorMessage = "El costo no puede ser negativo.";
+            return;
+        }
 
-        // Limpiar el formulario
-        NewPatient = "";
+        // Combinar fecha y hora
+        DateTime appointmentDate =
+            NewDate.Date.Add(NewTime.ToTimeSpan());
+
+        IsSaving = true;
+
+        try
+        {
+            var cita = new
+            {
+                Fecha = appointmentDate,
+                PacienteId = NewPatientId,
+                TipoCita = NewType,
+                Costo = NewCost,
+                Estado = "Pendiente",
+                EstadoPago = "Pendiente",
+                Observaciones = NewObservations,
+                CitaAnteriorId = (int?)null
+            };
+
+            var result =
+                await Http.PostAsJsonAsync("api/Citas", cita);
+
+            if (result.IsSuccessStatusCode)
+            {
+                SuccessMessage =
+                    "La cita se registró correctamente.";
+
+                ResetForm();
+
+                ShowForm = false;
+
+                await LoadAppointments();
+            }
+            else
+            {
+                var detail =
+                    await result.Content.ReadAsStringAsync();
+
+                ErrorMessage =
+                    "No se pudo guardar la cita. " + detail;
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage =
+                "Error al guardar la cita: " + ex.Message;
+        }
+        finally
+        {
+            IsSaving = false;
+        }
+    }
+
+    // LIMPIAR FORMULARIO
+    private void ResetForm()
+    {
+        NewPatientId = 0;
         NewType = "";
+
         NewDate = DateTime.Today;
         NewTime = new TimeOnly(9, 0);
 
-        ShowForm = false;
+        NewCost = 0;
+        NewObservations = "";
     }
 
-    // Obtener las iniciales del paciente
-    private string GetInitials(string name)
-    {
-        return string.Join("",
-            name.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                .Take(2)
-                .Select(word => word[0].ToString().ToUpper()));
-    }
-
-    // Obtener la clase CSS según el estado de la cita
+    // CLASE CSS SEGÚN ESTADO
     private string GetStatusClass(string status)
     {
         return status switch
@@ -105,17 +464,55 @@
             "Confirmada" => "status-confirmed",
             "Pendiente" => "status-pending",
             "Cancelada" => "status-cancelled",
+            "Completada" => "status-completed",
             _ => ""
         };
     }
 
-    // Modelo de una cita
+    // RESPUESTA GENERAL DE LA API
+    private class ApiResult<T>
+    {
+        public T? Value { get; set; }
+        public bool IsSuccess { get; set; }
+    }
+
+    // MODELO DE PACIENTE
+    private class PatientItem
+    {
+        public int PacienteId { get; set; }
+
+        public string Nombre { get; set; } = "";
+
+        public string Apellido { get; set; } = "";
+    }
+
+    // MODELO DE CITA RECIBIDO DE LA API
+    private class AppointmentDto
+    {
+        public int PacienteId { get; set; }
+
+        public DateTime Fecha { get; set; }
+
+        public string? TipoCita { get; set; }
+
+        public decimal Costo { get; set; }
+
+        public string Estado { get; set; } = "";
+
+        public PatientItem? Paciente { get; set; }
+    }
+
+    // MODELO UTILIZADO EN LA INTERFAZ
     private class AppointmentItem
     {
         public string Patient { get; set; } = "";
+
         public string Type { get; set; } = "";
+
         public DateTime Date { get; set; }
-        public TimeOnly Time { get; set; }
+
         public string Status { get; set; } = "";
+
+        public decimal Cost { get; set; }
     }
 }
