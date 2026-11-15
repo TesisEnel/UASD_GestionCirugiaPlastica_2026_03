@@ -1,0 +1,968 @@
+﻿@page "/pacientes"
+@using System.ComponentModel.DataAnnotations
+@using System.Net
+@using System.Text.Json
+@inject HttpClient Http
+
+<PageTitle>Pacientes | Tanger Clinic</PageTitle>
+
+<div class="pac-page">
+
+    <!-- ENCABEZADO -->
+    <div class="pac-header">
+        <div>
+            <h2>Pacientes</h2>
+            <p>Administra el registro de pacientes del consultorio</p>
+        </div>
+
+        <button type="button" class="pac-btn pac-btn-primary" @onclick="AbrirNuevo">
+            <i class="fa-solid fa-user-plus"></i>
+            Nuevo paciente
+        </button>
+    </div>
+
+    <!-- MENSAJE (ÉXITO / ERROR) -->
+    @if (_mensaje is not null)
+    {
+        <div class="pac-alert @(_mensajeEsError ? "pac-alert-error" : "pac-alert-ok")" role="alert">
+            <i class="fa-solid @(_mensajeEsError ? "fa-circle-exclamation" : "fa-circle-check")"></i>
+            <span>@_mensaje</span>
+            <button type="button" class="pac-alert-close" title="Cerrar" @onclick="CerrarMensaje">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+    }
+
+    <!-- TARJETAS DE RESUMEN -->
+    <div class="pac-stats">
+        <div class="pac-stat">
+            <div class="pac-stat-icon"><i class="fa-solid fa-user-group"></i></div>
+            <div>
+                <h3>Total de pacientes</h3>
+                <strong>@_totalGeneral</strong>
+            </div>
+        </div>
+
+        <div class="pac-stat">
+            <div class="pac-stat-icon"><i class="fa-solid fa-user-plus"></i></div>
+            <div>
+                <h3>Nuevos este mes</h3>
+                <strong>@_nuevosMes</strong>
+            </div>
+        </div>
+
+        <div class="pac-stat">
+            <div class="pac-stat-icon"><i class="fa-regular fa-envelope"></i></div>
+            <div>
+                <h3>Con correo registrado</h3>
+                <strong>@_conCorreo</strong>
+            </div>
+        </div>
+    </div>
+
+    <!-- PANEL PRINCIPAL -->
+    <div class="pac-panel">
+
+        <div class="pac-toolbar">
+
+            <!-- BÚSQUEDA: criterio + texto -->
+            <div class="pac-filter">
+                <select class="pac-select"
+                        aria-label="Buscar por"
+                        value="@_criterio"
+                        @onchange="AlCambiarCriterioAsync">
+                    <option value="nombre">Nombre</option>
+                    <option value="cedula">Cédula</option>
+                    <option value="telefono">Teléfono</option>
+                    <option value="email">Correo</option>
+                </select>
+
+                <div class="pac-search">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input @key="_criterio"
+                           type="text"
+                           placeholder="@PlaceholderBusqueda"
+                           value="@_busqueda"
+                           @oninput="AlBuscarAsync" />
+                </div>
+            </div>
+
+            <!-- ORDEN DEL LISTADO -->
+            <div class="pac-sort">
+                <label for="pac-orden">Ordenar por</label>
+
+                <select id="pac-orden"
+                        class="pac-select"
+                        value="@_orden"
+                        @onchange="AlCambiarOrden">
+                    <option value="fecha">Fecha de registro</option>
+                    <option value="nombre">Nombre (alfabético)</option>
+                    <option value="id">ID</option>
+                </select>
+
+                <button type="button"
+                        class="pac-btn pac-btn-outline pac-btn-sort"
+                        title="Invertir el orden"
+                        @onclick="AlternarDireccion">
+                    <i class="fa-solid @(_descendente ? "fa-arrow-down-wide-short" : "fa-arrow-up-wide-short")"></i>
+                    @EtiquetaDireccion
+                </button>
+
+                <span class="pac-count">
+                    @_pacientes.Count @(_pacientes.Count == 1 ? "paciente" : "pacientes")
+                </span>
+            </div>
+        </div>
+
+        @if (_cargando)
+        {
+            <div class="pac-state">
+                <div class="pac-spinner"></div>
+                <p>Cargando pacientes...</p>
+            </div>
+        }
+        else if (_errorCarga is not null)
+        {
+            <div class="pac-state">
+                <i class="fa-solid fa-triangle-exclamation pac-state-icon"></i>
+                <p>@_errorCarga</p>
+                <button type="button" class="pac-btn pac-btn-outline" @onclick="CargarAsync">
+                    <i class="fa-solid fa-rotate-right"></i>
+                    Reintentar
+                </button>
+            </div>
+        }
+        else if (_pacientes.Count == 0)
+        {
+            <div class="pac-state">
+                <i class="fa-regular fa-folder-open pac-state-icon"></i>
+                <p>
+                    @(string.IsNullOrWhiteSpace(_busqueda)
+                        ? "Aún no hay pacientes registrados."
+                        : $"No se encontraron pacientes con ese {EtiquetaCriterio}.")
+                </p>
+            </div>
+        }
+        else
+        {
+            <div class="pac-table-container">
+                <table class="pac-table">
+                    <thead>
+                        <tr>
+                            <th>Paciente</th>
+                            <th>Cédula</th>
+                            <th>Teléfono</th>
+                            <th>Correo</th>
+                            <th>Edad</th>
+                            <th>Registro</th>
+                            <th class="pac-th-actions">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in PacientesPagina)
+                        {
+                            <tr @key="p.PacienteId">
+                                <td>
+                                    <div class="pac-person">
+                                        <div class="pac-avatar">@Iniciales(p)</div>
+                                        <div>
+                                            <strong>@p.Nombre @p.Apellido</strong>
+                                            <span>ID #@p.PacienteId</span>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>@(p.Cedula ?? "—")</td>
+                                <td>@(p.Telefono ?? "—")</td>
+                                <td>@(p.Email ?? "—")</td>
+                                <td>@(CalcularEdad(p.FechaNacimiento)?.ToString() ?? "—")</td>
+                                <td>@p.FechaRegistro.ToString("dd/MM/yyyy")</td>
+                                <td>
+                                    <div class="pac-actions">
+                                        <button type="button" class="pac-icon-btn" title="Ver detalle"
+                                                @onclick="() => VerDetalleAsync(p.PacienteId)">
+                                            <i class="fa-regular fa-eye"></i>
+                                        </button>
+                                        <button type="button" class="pac-icon-btn" title="Editar"
+                                                @onclick="() => AbrirEditarAsync(p.PacienteId)">
+                                            <i class="fa-regular fa-pen-to-square"></i>
+                                        </button>
+                                        <button type="button" class="pac-icon-btn pac-icon-btn-danger" title="Eliminar"
+                                                @onclick="() => PedirEliminar(p)">
+                                            <i class="fa-regular fa-trash-can"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (TotalPaginas > 1)
+            {
+                <div class="pac-pager">
+                    <span>Página @_pagina de @TotalPaginas</span>
+                    <div>
+                        <button type="button" class="pac-icon-btn" disabled="@(_pagina == 1)" @onclick="PaginaAnterior">
+                            <i class="fa-solid fa-chevron-left"></i>
+                        </button>
+                        <button type="button" class="pac-icon-btn" disabled="@(_pagina == TotalPaginas)" @onclick="PaginaSiguiente">
+                            <i class="fa-solid fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+<!-- MODAL: NUEVO / EDITAR -->
+@if (_mostrarForm)
+{
+    <div class="pac-overlay">
+        <div class="pac-modal" role="dialog" aria-modal="true">
+
+            <div class="pac-modal-header">
+                <h3>
+                    <i class="fa-solid @(_form.PacienteId == 0 ? "fa-user-plus" : "fa-user-pen")"></i>
+                    @(_form.PacienteId == 0 ? "Nuevo paciente" : "Editar paciente")
+                </h3>
+                <button type="button" class="pac-icon-btn" title="Cerrar" @onclick="CerrarForm">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <EditForm Model="_form" OnValidSubmit="GuardarAsync">
+                <DataAnnotationsValidator />
+
+                <div class="pac-modal-body">
+
+                    @if (_errorFormulario is not null)
+                    {
+                        <div class="pac-alert pac-alert-error" role="alert">
+                            <i class="fa-solid fa-circle-exclamation"></i>
+                            <span>@_errorFormulario</span>
+                        </div>
+                    }
+
+                    <div class="pac-form-grid">
+                        <div class="pac-field">
+                            <label for="pac-nombre">Nombre *</label>
+                            <InputText id="pac-nombre" @bind-Value="_form.Nombre" placeholder="Ej. María" />
+                            <ValidationMessage For="() => _form.Nombre" />
+                        </div>
+
+                        <div class="pac-field">
+                            <label for="pac-apellido">Apellido *</label>
+                            <InputText id="pac-apellido" @bind-Value="_form.Apellido" placeholder="Ej. Reyes" />
+                            <ValidationMessage For="() => _form.Apellido" />
+                        </div>
+
+                        <div class="pac-field">
+                            <label for="pac-cedula">Cédula</label>
+                            <InputText id="pac-cedula" @bind-Value="_form.Cedula" placeholder="000-0000000-0" />
+                            <ValidationMessage For="() => _form.Cedula" />
+                        </div>
+
+                        <div class="pac-field">
+                            <label for="pac-nacimiento">Fecha de nacimiento</label>
+                            <InputDate id="pac-nacimiento"
+                                       TValue="DateOnly?"
+                                       @bind-Value="_form.FechaNacimiento"
+                                       max="@(DateTime.Today.ToString("yyyy-MM-dd"))" />
+                            <ValidationMessage For="() => _form.FechaNacimiento" />
+                        </div>
+
+                        <div class="pac-field">
+                            <label for="pac-telefono">Teléfono</label>
+                            <InputText id="pac-telefono" @bind-Value="_form.Telefono" placeholder="809-000-0000" />
+                            <ValidationMessage For="() => _form.Telefono" />
+                        </div>
+
+                        <div class="pac-field">
+                            <label for="pac-email">Correo electrónico</label>
+                            <InputText id="pac-email" @bind-Value="_form.Email" placeholder="correo&#64;ejemplo.com" />
+                            <ValidationMessage For="() => _form.Email" />
+                        </div>
+
+                        <div class="pac-field pac-field-full">
+                            <label for="pac-direccion">Dirección</label>
+                            <InputText id="pac-direccion" @bind-Value="_form.Direccion" placeholder="Calle, sector, ciudad" />
+                            <ValidationMessage For="() => _form.Direccion" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pac-modal-footer">
+                    <button type="button" class="pac-btn pac-btn-outline" @onclick="CerrarForm" disabled="@_guardando">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="pac-btn pac-btn-primary" disabled="@_guardando">
+                        @if (_guardando)
+                        {
+                            <span class="pac-spinner pac-spinner-sm"></span>
+                            <span>Guardando...</span>
+                        }
+                        else
+                        {
+                            <i class="fa-solid fa-floppy-disk"></i>
+                            <span>Guardar</span>
+                        }
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+<!-- MODAL: DETALLE -->
+@if (_detalle is not null)
+{
+    <div class="pac-overlay" @onclick="CerrarDetalle">
+        <div class="pac-modal pac-modal-sm" role="dialog" aria-modal="true" @onclick:stopPropagation="true">
+
+            <div class="pac-modal-header">
+                <h3><i class="fa-regular fa-id-card"></i> Detalle del paciente</h3>
+                <button type="button" class="pac-icon-btn" title="Cerrar" @onclick="CerrarDetalle">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="pac-modal-body">
+                <div class="pac-detail-head">
+                    <div class="pac-avatar pac-avatar-lg">@Iniciales(_detalle)</div>
+                    <div>
+                        <h4>@_detalle.Nombre @_detalle.Apellido</h4>
+                        <span>ID #@_detalle.PacienteId</span>
+                    </div>
+                </div>
+
+                <dl class="pac-detail-list">
+                    <div><dt>Cédula</dt><dd>@(_detalle.Cedula ?? "—")</dd></div>
+                    <div>
+                        <dt>Fecha de nacimiento</dt>
+                        <dd>
+                            @(_detalle.FechaNacimiento?.ToString("dd/MM/yyyy") ?? "—")
+                            @if (CalcularEdad(_detalle.FechaNacimiento) is int edad)
+                            {
+                                <small>(@edad años)</small>
+                            }
+                        </dd>
+                    </div>
+                    <div><dt>Teléfono</dt><dd>@(_detalle.Telefono ?? "—")</dd></div>
+                    <div><dt>Correo</dt><dd>@(_detalle.Email ?? "—")</dd></div>
+                    <div><dt>Dirección</dt><dd>@(_detalle.Direccion ?? "—")</dd></div>
+                    <div><dt>Fecha de registro</dt><dd>@_detalle.FechaRegistro.ToString("dd/MM/yyyy hh:mm tt")</dd></div>
+                </dl>
+            </div>
+
+            <div class="pac-modal-footer">
+                <button type="button" class="pac-btn pac-btn-outline" @onclick="CerrarDetalle">Cerrar</button>
+                <button type="button" class="pac-btn pac-btn-primary" @onclick="EditarDesdeDetalle">
+                    <i class="fa-regular fa-pen-to-square"></i>
+                    Editar
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- MODAL: CONFIRMAR ELIMINACIÓN -->
+@if (_aEliminar is not null)
+{
+    <div class="pac-overlay" @onclick="CancelarEliminar">
+        <div class="pac-modal pac-modal-xs" role="alertdialog" aria-modal="true" @onclick:stopPropagation="true">
+
+            <div class="pac-modal-body pac-confirm">
+                <div class="pac-confirm-icon"><i class="fa-regular fa-trash-can"></i></div>
+                <h3>¿Eliminar paciente?</h3>
+                <p>
+                    Se eliminará a <strong>@_aEliminar.Nombre @_aEliminar.Apellido</strong>.
+                    Esta acción no se puede deshacer.
+                </p>
+            </div>
+
+            <div class="pac-modal-footer pac-modal-footer-center">
+                <button type="button" class="pac-btn pac-btn-outline" @onclick="CancelarEliminar" disabled="@_eliminando">
+                    Cancelar
+                </button>
+                <button type="button" class="pac-btn pac-btn-danger" @onclick="ConfirmarEliminarAsync" disabled="@_eliminando">
+                    @if (_eliminando)
+                    {
+                        <span class="pac-spinner pac-spinner-sm"></span>
+                        <span>Eliminando...</span>
+                    }
+                    else
+                    {
+                        <i class="fa-regular fa-trash-can"></i>
+                        <span>Eliminar</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    // ───────────────────────── Configuración ─────────────────────────
+    private const string Ruta = "api/Pacientes";
+    private const int PorPagina = 8;
+
+    private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
+
+    // ───────────────────────── Estado ─────────────────────────
+    private List<PacienteModel> _pacientes = new();
+
+    private bool _cargando = true;
+    private string? _errorCarga;
+
+    private string _busqueda = "";
+    private string _criterio = "nombre"; // nombre | cedula | telefono | email
+
+    // Orden del listado: fecha | nombre | id  (más reciente primero por defecto)
+    private string _orden = "fecha";
+    private bool _descendente = true;
+    private CancellationTokenSource? _busquedaCts;
+    private int _solicitud;
+
+    private int _pagina = 1;
+
+    // Resumen (se calcula con la lista completa, sin filtro de búsqueda)
+    private int _totalGeneral;
+    private int _nuevosMes;
+    private int _conCorreo;
+
+    // Mensajes
+    private string? _mensaje;
+    private bool _mensajeEsError;
+
+    // Formulario
+    private bool _mostrarForm;
+    private bool _guardando;
+    private string? _errorFormulario;
+    private PacienteModel _form = new();
+
+    // Detalle y eliminación
+    private PacienteModel? _detalle;
+    private PacienteModel? _aEliminar;
+    private bool _eliminando;
+
+    // ───────────────────────── Propiedades calculadas ─────────────────────────
+    private static readonly StringComparer Comparador = StringComparer.InvariantCultureIgnoreCase;
+
+    private IEnumerable<PacienteModel> PacientesOrdenados => _orden switch
+    {
+        "nombre" => _descendente
+            ? _pacientes.OrderByDescending(p => p.Nombre, Comparador).ThenByDescending(p => p.Apellido, Comparador)
+            : _pacientes.OrderBy(p => p.Nombre, Comparador).ThenBy(p => p.Apellido, Comparador),
+
+        "id" => _descendente
+            ? _pacientes.OrderByDescending(p => p.PacienteId)
+            : _pacientes.OrderBy(p => p.PacienteId),
+
+        _ => _descendente
+            ? _pacientes.OrderByDescending(p => p.FechaRegistro).ThenByDescending(p => p.PacienteId)
+            : _pacientes.OrderBy(p => p.FechaRegistro).ThenBy(p => p.PacienteId)
+    };
+
+    private IEnumerable<PacienteModel> PacientesPagina =>
+        PacientesOrdenados
+            .Skip((_pagina - 1) * PorPagina)
+            .Take(PorPagina);
+
+    private string EtiquetaDireccion => (_orden, _descendente) switch
+    {
+        ("fecha", true) => "Más recientes primero",
+        ("fecha", false) => "Más antiguos primero",
+        ("nombre", false) => "A → Z",
+        ("nombre", true) => "Z → A",
+        (_, false) => "Menor a mayor",
+        _ => "Mayor a menor"
+    };
+
+    private string EtiquetaCriterio => _criterio switch
+    {
+        "cedula" => "número de cédula",
+        "telefono" => "teléfono",
+        "email" => "correo",
+        _ => "nombre"
+    };
+
+    private string PlaceholderBusqueda => _criterio switch
+    {
+        "cedula" => "Escribe la cédula del paciente...",
+        "telefono" => "Escribe el teléfono del paciente...",
+        "email" => "Escribe el correo del paciente...",
+        _ => "Escribe el nombre o apellido..."
+    };
+
+    // Endpoint según el criterio elegido (el valor se agrega ya codificado).
+    private string UrlBusqueda(string valor)
+    {
+        string v = Uri.EscapeDataString(valor.Trim());
+
+        return _criterio switch
+        {
+            "cedula" => $"{Ruta}/buscar/cedula?cedula={v}",
+            "telefono" => $"{Ruta}/buscar/telefono?telefono={v}",
+            "email" => $"{Ruta}/buscar/email?email={v}",
+            _ => $"{Ruta}/buscar?nombre={v}"
+        };
+    }
+
+    private int TotalPaginas =>
+        Math.Max(1, (int)Math.Ceiling(_pacientes.Count / (double)PorPagina));
+
+    // ───────────────────────── Ciclo de vida ─────────────────────────
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    // ───────────────────────── GET api/Pacientes  y  GET api/Pacientes/buscar ─────────────────────────
+    private async Task CargarAsync()
+    {
+        int solicitud = ++_solicitud;
+        _cargando = true;
+        _errorCarga = null;
+        StateHasChanged();
+
+        try
+        {
+            bool sinFiltro = string.IsNullOrWhiteSpace(_busqueda);
+
+            // La API exige el parámetro de búsqueda; sin texto se usa el listado completo.
+            string url = sinFiltro ? Ruta : UrlBusqueda(_busqueda);
+
+            using var respuesta = await Http.GetAsync(url);
+            var resultado = await LeerAsync(respuesta);
+
+            if (solicitud != _solicitud) return; // llegó una búsqueda más reciente
+
+            if (resultado.Exito)
+            {
+                _pacientes = resultado.Valor?.Deserialize<List<PacienteModel>>(JsonOpts) ?? new();
+                _pagina = 1;
+
+                if (sinFiltro) ActualizarResumen();
+            }
+            else
+            {
+                _errorCarga = resultado.Mensaje;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            if (solicitud != _solicitud) return;
+            _errorCarga = "No se pudo conectar con el servidor. Verifica que la API esté en ejecución.";
+        }
+        catch (JsonException)
+        {
+            if (solicitud != _solicitud) return;
+            _errorCarga = "La respuesta del servidor no tiene el formato esperado.";
+        }
+        finally
+        {
+            if (solicitud == _solicitud) _cargando = false;
+        }
+    }
+
+    private void ActualizarResumen()
+    {
+        var hoy = DateTime.Today;
+
+        _totalGeneral = _pacientes.Count;
+        _nuevosMes = _pacientes.Count(p =>
+            p.FechaRegistro.Year == hoy.Year && p.FechaRegistro.Month == hoy.Month);
+        _conCorreo = _pacientes.Count(p => !string.IsNullOrWhiteSpace(p.Email));
+    }
+
+    // ───────────────────────── Búsqueda con espera (debounce) ─────────────────────────
+    private async Task AlBuscarAsync(ChangeEventArgs e)
+    {
+        _busqueda = e.Value?.ToString() ?? "";
+
+        _busquedaCts?.Cancel();
+        _busquedaCts = new CancellationTokenSource();
+        var token = _busquedaCts.Token;
+
+        try
+        {
+            await Task.Delay(350, token);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+
+        await CargarAsync();
+    }
+
+    private async Task AlCambiarCriterioAsync(ChangeEventArgs e)
+    {
+        _criterio = e.Value?.ToString() ?? "nombre";
+
+        // Si ya hay texto escrito, repite la búsqueda con el nuevo criterio.
+        if (!string.IsNullOrWhiteSpace(_busqueda))
+            await CargarAsync();
+    }
+
+    // ───────────────────────── Orden del listado ─────────────────────────
+    private void AlCambiarOrden(ChangeEventArgs e)
+    {
+        _orden = e.Value?.ToString() ?? "fecha";
+
+        // Dirección más natural para cada orden: fechas de nuevo a viejo, el resto ascendente.
+        _descendente = _orden == "fecha";
+        _pagina = 1;
+    }
+
+    private void AlternarDireccion()
+    {
+        _descendente = !_descendente;
+        _pagina = 1;
+    }
+
+    // ───────────────────────── GET api/Pacientes/{id} ─────────────────────────
+    private async Task<PacienteModel?> ObtenerPorIdAsync(int id)
+    {
+        try
+        {
+            using var respuesta = await Http.GetAsync($"{Ruta}/{id}");
+            var resultado = await LeerAsync(respuesta);
+
+            if (!resultado.Exito || resultado.Valor is null ||
+                resultado.Valor.Value.ValueKind != JsonValueKind.Object)
+            {
+                MostrarMensaje(
+                    string.IsNullOrWhiteSpace(resultado.Mensaje)
+                        ? "No se encontró el paciente solicitado."
+                        : resultado.Mensaje,
+                    esError: true);
+                return null;
+            }
+
+            return resultado.Valor.Value.Deserialize<PacienteModel>(JsonOpts);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException)
+        {
+            MostrarMensaje("No se pudo obtener la información del paciente.", esError: true);
+            return null;
+        }
+    }
+
+    private async Task VerDetalleAsync(int id) => _detalle = await ObtenerPorIdAsync(id);
+
+    private void CerrarDetalle() => _detalle = null;
+
+    private void EditarDesdeDetalle()
+    {
+        if (_detalle is null) return;
+
+        _form = _detalle.Clonar();
+        _errorFormulario = null;
+        _detalle = null;
+        _mostrarForm = true;
+    }
+
+    // ───────────────────────── POST api/Pacientes (crear y editar) ─────────────────────────
+    private void AbrirNuevo()
+    {
+        _form = new PacienteModel { FechaRegistro = DateTime.Now };
+        _errorFormulario = null;
+        _mostrarForm = true;
+    }
+
+    private async Task AbrirEditarAsync(int id)
+    {
+        var paciente = await ObtenerPorIdAsync(id);
+        if (paciente is null) return;
+
+        _form = paciente;
+        _errorFormulario = null;
+        _mostrarForm = true;
+    }
+
+    private void CerrarForm()
+    {
+        if (_guardando) return;
+        _mostrarForm = false;
+    }
+
+    private async Task GuardarAsync()
+    {
+        _errorFormulario = null;
+
+        if (_form.FechaNacimiento is DateOnly nacimiento &&
+            nacimiento > DateOnly.FromDateTime(DateTime.Today))
+        {
+            _errorFormulario = "La fecha de nacimiento no puede ser futura.";
+            return;
+        }
+
+        _guardando = true;
+
+        try
+        {
+            bool esNuevo = _form.PacienteId == 0;
+            var paciente = _form.Normalizar();
+
+            using var respuesta = await Http.PostAsJsonAsync(Ruta, paciente, JsonOpts);
+            var resultado = await LeerAsync(respuesta);
+
+            bool noGuardo = resultado.Valor is { ValueKind: JsonValueKind.False };
+
+            if (!resultado.Exito || noGuardo)
+            {
+                _errorFormulario = !resultado.Exito && !string.IsNullOrWhiteSpace(resultado.Mensaje)
+                    ? resultado.Mensaje
+                    : "No se pudo guardar el paciente.";
+                return;
+            }
+
+            _mostrarForm = false;
+            MostrarMensaje(
+                esNuevo ? "Paciente registrado correctamente." : "Paciente actualizado correctamente.",
+                esError: false);
+
+            await CargarAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _errorFormulario = "No se pudo conectar con el servidor. Verifica que la API esté en ejecución.";
+        }
+        catch (JsonException)
+        {
+            _errorFormulario = "La respuesta del servidor no tiene el formato esperado.";
+        }
+        finally
+        {
+            _guardando = false;
+        }
+    }
+
+    // ───────────────────────── DELETE api/Pacientes/{id} ─────────────────────────
+    private void PedirEliminar(PacienteModel paciente) => _aEliminar = paciente;
+
+    private void CancelarEliminar()
+    {
+        if (_eliminando) return;
+        _aEliminar = null;
+    }
+
+    private async Task ConfirmarEliminarAsync()
+    {
+        if (_aEliminar is null) return;
+
+        _eliminando = true;
+        var paciente = _aEliminar;
+
+        try
+        {
+            using var respuesta = await Http.DeleteAsync($"{Ruta}/{paciente.PacienteId}");
+            var resultado = await LeerAsync(respuesta);
+
+            _aEliminar = null;
+
+            if (resultado.Exito && resultado.Valor is not { ValueKind: JsonValueKind.False })
+            {
+                MostrarMensaje($"Se eliminó a {paciente.Nombre} {paciente.Apellido}.", esError: false);
+                await CargarAsync();
+            }
+            else
+            {
+                // Ej.: el paciente tiene citas, consultas, cirugías o recetas asociadas (409).
+                MostrarMensaje(
+                    string.IsNullOrWhiteSpace(resultado.Mensaje)
+                        ? "No se pudo eliminar el paciente."
+                        : resultado.Mensaje,
+                    esError: true);
+            }
+        }
+        catch (HttpRequestException)
+        {
+            _aEliminar = null;
+            MostrarMensaje("No se pudo conectar con el servidor. Verifica que la API esté en ejecución.", esError: true);
+        }
+        catch (JsonException)
+        {
+            _aEliminar = null;
+            MostrarMensaje("La respuesta del servidor no tiene el formato esperado.", esError: true);
+        }
+        finally
+        {
+            _eliminando = false;
+        }
+    }
+
+    // ───────────────────────── Paginación ─────────────────────────
+    private void PaginaAnterior() { if (_pagina > 1) _pagina--; }
+
+    private void PaginaSiguiente() { if (_pagina < TotalPaginas) _pagina++; }
+
+    // ───────────────────────── Mensajes ─────────────────────────
+    private void MostrarMensaje(string texto, bool esError)
+    {
+        _mensaje = texto;
+        _mensajeEsError = esError;
+    }
+
+    private void CerrarMensaje() => _mensaje = null;
+
+    // ───────────────────────── Utilidades de vista ─────────────────────────
+    private static string Iniciales(PacienteModel p)
+    {
+        string n = string.IsNullOrWhiteSpace(p.Nombre) ? "" : p.Nombre.Trim()[..1];
+        string a = string.IsNullOrWhiteSpace(p.Apellido) ? "" : p.Apellido.Trim()[..1];
+        return (n + a).ToUpperInvariant();
+    }
+
+    private static int? CalcularEdad(DateOnly? nacimiento)
+    {
+        if (nacimiento is null) return null;
+
+        var hoy = DateOnly.FromDateTime(DateTime.Today);
+        int edad = hoy.Year - nacimiento.Value.Year;
+        if (nacimiento.Value > hoy.AddYears(-edad)) edad--;
+
+        return edad < 0 ? null : edad;
+    }
+
+    // ───────────────────────── Lectura de la respuesta de la API ─────────────────────────
+    // La API responde con un Result: { isSuccess, isFailure, value, error: { code, description } }.
+    // Esta lectura es tolerante: también entiende ProblemDetails (400 de validación) y cuerpos vacíos (404).
+    private sealed record ApiResultado(bool Exito, string Mensaje, JsonElement? Valor);
+
+    private static async Task<ApiResultado> LeerAsync(HttpResponseMessage respuesta)
+    {
+        string texto = await respuesta.Content.ReadAsStringAsync();
+        bool exitoHttp = respuesta.IsSuccessStatusCode;
+
+        if (string.IsNullOrWhiteSpace(texto))
+        {
+            string vacio = exitoHttp ? "" : MensajePorEstado(respuesta.StatusCode);
+            return new ApiResultado(exitoHttp, vacio, null);
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(texto);
+            var raiz = doc.RootElement;
+
+            if (raiz.ValueKind != JsonValueKind.Object)
+                return new ApiResultado(exitoHttp, exitoHttp ? "" : MensajePorEstado(respuesta.StatusCode), null);
+
+            bool exito = exitoHttp;
+            if (Propiedad(raiz, "isSuccess") is { ValueKind: JsonValueKind.True or JsonValueKind.False } ok)
+                exito = exitoHttp && ok.GetBoolean();
+
+            JsonElement? valor = Propiedad(raiz, "value") is { } v ? v.Clone() : null;
+
+            string mensaje = exito ? "" : ExtraerError(raiz) ?? MensajePorEstado(respuesta.StatusCode);
+            return new ApiResultado(exito, mensaje, valor);
+        }
+        catch (JsonException)
+        {
+            return new ApiResultado(exitoHttp, exitoHttp ? "" : MensajePorEstado(respuesta.StatusCode), null);
+        }
+    }
+
+    private static string? ExtraerError(JsonElement raiz)
+    {
+        // Result.Failure → "error": { "code": "...", "description": "..." }
+        if (Propiedad(raiz, "error") is { ValueKind: JsonValueKind.Object } error)
+        {
+            string? texto = TextoDe(error, "description") ?? TextoDe(error, "message") ?? TextoDe(error, "code");
+            if (texto is not null) return texto;
+        }
+
+        // ProblemDetails de validación → "errors": { "Campo": ["mensaje"] }
+        if (Propiedad(raiz, "errors") is { ValueKind: JsonValueKind.Object } errores)
+        {
+            var mensajes = errores.EnumerateObject()
+                .SelectMany(p => p.Value.ValueKind == JsonValueKind.Array ? p.Value.EnumerateArray() : Enumerable.Empty<JsonElement>())
+                .Where(x => x.ValueKind == JsonValueKind.String)
+                .Select(x => x.GetString())
+                .Where(x => !string.IsNullOrWhiteSpace(x));
+
+            string unido = string.Join(" ", mensajes);
+            if (unido.Length > 0) return unido;
+        }
+
+        return TextoDe(raiz, "detail") ?? TextoDe(raiz, "title") ?? TextoDe(raiz, "message");
+    }
+
+    private static string? TextoDe(JsonElement objeto, string nombre) =>
+        Propiedad(objeto, nombre) is { ValueKind: JsonValueKind.String } e && !string.IsNullOrWhiteSpace(e.GetString())
+            ? e.GetString()
+            : null;
+
+    private static JsonElement? Propiedad(JsonElement objeto, string nombre)
+    {
+        foreach (var p in objeto.EnumerateObject())
+            if (p.Name.Equals(nombre, StringComparison.OrdinalIgnoreCase))
+                return p.Value;
+
+        return null;
+    }
+
+    private static string MensajePorEstado(HttpStatusCode estado) => estado switch
+    {
+        HttpStatusCode.NotFound => "No se encontró el registro solicitado.",
+        HttpStatusCode.Conflict => "La operación no se pudo completar porque el registro tiene datos relacionados.",
+        HttpStatusCode.BadRequest => "La solicitud no es válida.",
+        _ => $"Error del servidor ({(int)estado})."
+    };
+
+    // ───────────────────────── Modelo del formulario ─────────────────────────
+    // Refleja la entidad Paciente de la API (sin las colecciones de navegación).
+    public class PacienteModel
+    {
+        public int PacienteId { get; set; }
+
+        public DateTime FechaRegistro { get; set; }
+
+        [Required(ErrorMessage = "El nombre es obligatorio.")]
+        [StringLength(250, ErrorMessage = "Máximo 250 caracteres.")]
+        public string Nombre { get; set; } = "";
+
+        [Required(ErrorMessage = "El apellido es obligatorio.")]
+        [StringLength(250, ErrorMessage = "Máximo 250 caracteres.")]
+        public string Apellido { get; set; } = "";
+
+        [StringLength(20, ErrorMessage = "Máximo 20 caracteres.")]
+        public string? Cedula { get; set; }
+
+        public DateOnly? FechaNacimiento { get; set; }
+
+        [StringLength(250, ErrorMessage = "Máximo 250 caracteres.")]
+        public string? Telefono { get; set; }
+
+        [EmailAddress(ErrorMessage = "El correo no es válido.")]
+        [StringLength(250, ErrorMessage = "Máximo 250 caracteres.")]
+        public string? Email { get; set; }
+
+        [StringLength(250, ErrorMessage = "Máximo 250 caracteres.")]
+        public string? Direccion { get; set; }
+
+        public PacienteModel Clonar() => (PacienteModel)MemberwiseClone();
+
+        // Prepara el objeto para enviarlo a la API: recorta espacios y convierte vacíos en null.
+        // Es importante con la cédula, porque tiene índice único y dos "" chocarían entre sí.
+        public PacienteModel Normalizar()
+        {
+            var copia = Clonar();
+            copia.Nombre = Nombre.Trim();
+            copia.Apellido = Apellido.Trim();
+            copia.Cedula = Limpiar(Cedula);
+            copia.Telefono = Limpiar(Telefono);
+            copia.Email = Limpiar(Email);
+            copia.Direccion = Limpiar(Direccion);
+
+            if (copia.FechaRegistro == default)
+                copia.FechaRegistro = DateTime.Now;
+
+            return copia;
+        }
+
+        private static string? Limpiar(string? valor) =>
+            string.IsNullOrWhiteSpace(valor) ? null : valor.Trim();
+    }
+}
