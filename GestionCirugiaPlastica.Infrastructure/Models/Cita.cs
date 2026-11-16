@@ -48,7 +48,7 @@ public partial class Cita
 
     [ForeignKey("PacienteId")]
     [InverseProperty("Cita")]
-    public virtual Paciente Paciente { get; set; } = null!;
+    public virtual Paciente? Paciente { get; set; }
 
     [InverseProperty("Cita")]
     public virtual ICollection<Pago> Pagos { get; set; } = new List<Pago>();

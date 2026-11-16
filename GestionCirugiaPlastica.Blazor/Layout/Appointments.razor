@@ -1,4 +1,5 @@
-﻿@page "/citas"
+﻿
+@page "/citas"
 @using System.Net.Http.Json
 @inject HttpClient Http
 
@@ -142,8 +143,7 @@
 
                     <textarea class="form-control"
                               rows="3"
-                              @bind="NewObservations">
-                    </textarea>
+                              @bind="NewObservations"></textarea>
                 </div>
 
                 <div class="appointment-actions">
@@ -214,6 +214,7 @@
                             <th>Hora</th>
                             <th>Costo</th>
                             <th>Estado</th>
+                            <th>Acciones</th>
                         </tr>
                     </thead>
 
@@ -243,6 +244,20 @@
                                         @appointment.Status
                                     </span>
                                 </td>
+
+                                <td>
+                                    <select class="form-select"
+                                            value="@appointment.Status"
+                                            disabled="@IsUpdatingStatus"
+                                            @onchange="(e) => UpdateAppointmentStatus(appointment, e.Value?.ToString())">
+
+                                        <option value="Pendiente">Pendiente</option>
+                                        <option value="Confirmada">Confirmada</option>
+                                        <option value="Completada">Completada</option>
+                                        <option value="Cancelada">Cancelada</option>
+
+                                    </select>
+                                </td>
                             </tr>
                         }
 
@@ -267,6 +282,7 @@
     private bool ShowForm;
     private bool IsLoading = true;
     private bool IsSaving;
+    private bool IsUpdatingStatus;
 
     // FORMULARIO
     private int NewPatientId;
@@ -336,6 +352,8 @@
             AppointmentList = (response?.Value ?? new())
                 .Select(c => new AppointmentItem
                 {
+                    CitaId = c.CitaId,
+
                     Patient = c.Paciente != null
                         ? $"{c.Paciente.Nombre} {c.Paciente.Apellido}"
                         : "Paciente #" + c.PacienteId,
@@ -389,7 +407,6 @@
             return;
         }
 
-        // Combinar fecha y hora
         DateTime appointmentDate =
             NewDate.Date.Add(NewTime.ToTimeSpan());
 
@@ -443,6 +460,61 @@
         }
     }
 
+    // ACTUALIZAR ESTADO DE UNA CITA
+    private async Task UpdateAppointmentStatus(
+        AppointmentItem appointment,
+        string? nuevoEstado)
+    {
+        if (string.IsNullOrWhiteSpace(nuevoEstado) ||
+            nuevoEstado == appointment.Status)
+        {
+            return;
+        }
+
+        ErrorMessage = "";
+        SuccessMessage = "";
+
+        string estadoAnterior = appointment.Status;
+
+        IsUpdatingStatus = true;
+
+        try
+        {
+            var response = await Http.PatchAsJsonAsync(
+                $"api/Citas/{appointment.CitaId}/estado",
+                nuevoEstado);
+
+            if (response.IsSuccessStatusCode)
+            {
+                appointment.Status = nuevoEstado;
+
+                SuccessMessage =
+                    "El estado de la cita se actualizó correctamente.";
+            }
+            else
+            {
+                appointment.Status = estadoAnterior;
+
+                var detail =
+                    await response.Content.ReadAsStringAsync();
+
+                ErrorMessage =
+                    "No se pudo actualizar el estado. " + detail;
+            }
+        }
+        catch (Exception ex)
+        {
+            appointment.Status = estadoAnterior;
+
+            ErrorMessage =
+                "Error al actualizar el estado: " + ex.Message;
+        }
+        finally
+        {
+            IsUpdatingStatus = false;
+        }
+    }
+
     // LIMPIAR FORMULARIO
     private void ResetForm()
     {
@@ -489,6 +561,8 @@
     // MODELO DE CITA RECIBIDO DE LA API
     private class AppointmentDto
     {
+        public int CitaId { get; set; }
+
         public int PacienteId { get; set; }
 
         public DateTime Fecha { get; set; }
@@ -505,6 +579,8 @@
     // MODELO UTILIZADO EN LA INTERFAZ
     private class AppointmentItem
     {
+        public int CitaId { get; set; }
+
         public string Patient { get; set; } = "";
 
         public string Type { get; set; } = "";
