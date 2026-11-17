@@ -1,0 +1,11 @@
+
+[
+  {
+    "projectKey": "gestioncirugiaplastica_api",
+    "projectName": "GestionCirugiaPlastica API"
+  },
+  {
+    "projectKey": "gestioncirugiaplastica_web",
+    "projectName": "GestionCirugiaPlastica Blazor Web"
+  }
+]
