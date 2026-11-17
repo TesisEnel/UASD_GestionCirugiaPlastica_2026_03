@@ -55,6 +55,45 @@ public class CitasController : ControllerBase
         return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
+    // PATCH: api/Citas/5/estado
+    [HttpPatch("{id:int}/estado")]
+    public async Task<IActionResult> ActualizarEstado(
+        int id,
+        [FromBody] string estado)
+    {
+        if (string.IsNullOrWhiteSpace(estado))
+            return BadRequest("Debe indicar un estado.");
+
+        var estadosPermitidos = new[]
+        {
+        "Pendiente",
+        "Confirmada",
+        "Completada",
+        "Cancelada"
+    };
+
+        if (!estadosPermitidos.Contains(
+            estado.Trim(),
+            StringComparer.OrdinalIgnoreCase))
+        {
+            return BadRequest("El estado indicado no es válido.");
+        }
+
+        var resultado = await _citasService.Buscar(id);
+
+        if (resultado.Value is null)
+            return NotFound("La cita no existe.");
+
+        var cita = resultado.Value;
+        cita.Estado = estado.Trim();
+
+        var actualizado = await _citasService.Guardar(cita);
+
+        return actualizado.IsSuccess
+            ? Ok(actualizado)
+            : BadRequest(actualizado);
+    }
+
     // DELETE: api/Citas/5
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)

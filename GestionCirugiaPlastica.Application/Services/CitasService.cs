@@ -1,4 +1,5 @@
-﻿using Aplicada1.Core;
+﻿
+using Aplicada1.Core;
 using GestionCirugiaPlastica.Infrastructure.Data;
 using GestionCirugiaPlastica.Infrastructure.Models;
 using Microsoft.EntityFrameworkCore;
@@ -11,9 +12,7 @@ public class CitasService(
     IDbContextFactory<GestionCirugiaPlasticaContext> contextFactory
 ) : IServiceResult<Cita, int>
 {
-    // ── Errores ────────────────────────────────────────────────────────────
-    // IMPORTANTE: Result.Success(false) NO es un fallo: es un resultado exitoso
-    // que lleva "false" adentro. Para fallar hay que usar Result.Failure(error).
+    // ERRORES
     private static readonly Error PacienteRequerido =
         new("Cita.PacienteRequerido", "Debe indicar un paciente válido.");
 
@@ -36,7 +35,7 @@ public class CitasService(
     private static readonly Error ErrorAlEliminar =
         new("Cita.ErrorAlEliminar", "No se pudo eliminar la cita.");
 
-    // ── Guardar ────────────────────────────────────────────────────────────
+    // GUARDAR CITA
     public async Task<Result> Guardar(Cita cita)
     {
         if (cita == null || cita.PacienteId <= 0)
@@ -44,14 +43,14 @@ public class CitasService(
 
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
-        // 1. El paciente debe existir.
+        // Verificar que el paciente exista.
         bool pacienteExiste = await contexto.Pacientes
             .AnyAsync(p => p.PacienteId == cita.PacienteId);
 
         if (!pacienteExiste)
             return Result.Failure(PacienteNoExiste);
 
-        // 2. Si tiene cita anterior: debe existir y no puede ser ella misma.
+        // Validar cita anterior.
         if (cita.CitaAnteriorId.HasValue)
         {
             if (cita.CitaAnteriorId.Value == cita.CitaId)
@@ -68,16 +67,14 @@ public class CitasService(
         {
             if (cita.CitaId == 0)
             {
-                // Se copian solo los campos propios de la cita. Así no se guarda
-                // por accidente el Paciente (u otro objeto) que venga anidado en el JSON.
                 var nueva = new Cita
                 {
                     Fecha = cita.Fecha,
                     PacienteId = cita.PacienteId,
                     TipoCita = cita.TipoCita?.Trim(),
                     Costo = cita.Costo,
-                    Estado = cita.Estado,          // si viene null, la base usa "Pendiente"
-                    EstadoPago = cita.EstadoPago,  // si viene null, la base usa "Pendiente"
+                    Estado = cita.Estado,
+                    EstadoPago = cita.EstadoPago,
                     Observaciones = cita.Observaciones?.Trim(),
                     CitaAnteriorId = cita.CitaAnteriorId
                 };
@@ -99,7 +96,6 @@ public class CitasService(
                 existente.Observaciones = cita.Observaciones?.Trim();
                 existente.CitaAnteriorId = cita.CitaAnteriorId;
 
-                // Estado y EstadoPago no aceptan null: solo se cambian si vienen con valor.
                 if (!string.IsNullOrWhiteSpace(cita.Estado))
                     existente.Estado = cita.Estado.Trim();
 
@@ -109,17 +105,16 @@ public class CitasService(
 
             await contexto.SaveChangesAsync();
 
-            // Si no cambió nada, SaveChanges devuelve 0 pero no es un error.
             return Result.Success();
         }
         catch (DbUpdateException)
         {
-            // Red de seguridad por si la base rechaza algo que no se validó arriba.
             return Result.Failure(ErrorAlGuardar);
         }
     }
 
-    // ── Consultas ──────────────────────────────────────────────────────────
+    // CONSULTAS
+
     // Buscar por ID
     public async Task<Result<Cita?>> Buscar(int citaId)
     {
@@ -133,7 +128,7 @@ public class CitasService(
         return Result<Cita?>.Success(cita);
     }
 
-    // Buscar citas por nombre o apellido del paciente
+    // Buscar por nombre o apellido del paciente
     public async Task<Result<List<Cita>>> BuscarPorNombre(string nombre)
     {
         await using var contexto = await contextFactory.CreateDbContextAsync();
@@ -142,14 +137,15 @@ public class CitasService(
             .AsNoTracking()
             .Include(c => c.Paciente)
             .Where(c =>
-                c.Paciente.Nombre.Contains(nombre) ||
-                c.Paciente.Apellido.Contains(nombre))
+                c.Paciente != null &&
+                (c.Paciente.Nombre.Contains(nombre) ||
+                 c.Paciente.Apellido.Contains(nombre)))
             .ToListAsync();
 
         return Result<List<Cita>>.Success(citas);
     }
 
-    // Buscar citas por cédula del paciente
+    // Buscar por cédula del paciente
     public async Task<Result<List<Cita>>> BuscarPorCedula(string cedula)
     {
         await using var contexto = await contextFactory.CreateDbContextAsync();
@@ -157,7 +153,9 @@ public class CitasService(
         var citas = await contexto.Citas
             .AsNoTracking()
             .Include(c => c.Paciente)
-            .Where(c => c.Paciente.Cedula == cedula)
+            .Where(c =>
+                c.Paciente != null &&
+                c.Paciente.Cedula == cedula)
             .ToListAsync();
 
         return Result<List<Cita>>.Success(citas);
@@ -178,12 +176,12 @@ public class CitasService(
         return Result<List<Cita>>.Success(citas);
     }
 
-    // ── Eliminar ───────────────────────────────────────────────────────────
+    // ELIMINAR CITA
     public async Task<Result> Eliminar(int citaId)
     {
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
-        // No se puede borrar una cita que ya tiene datos que dependen de ella.
+        // Verificar registros relacionados.
         bool tieneRelacionados =
             await contexto.Consultas.AnyAsync(c => c.CitaId == citaId) ||
             await contexto.Pagos.AnyAsync(p => p.CitaId == citaId) ||
@@ -199,7 +197,9 @@ public class CitasService(
                 .Where(c => c.CitaId == citaId)
                 .ExecuteDeleteAsync() > 0;
 
-            return eliminado ? Result.Success() : Result.Failure(CitaNoExiste);
+            return eliminado
+                ? Result.Success()
+                : Result.Failure(CitaNoExiste);
         }
         catch (Exception ex) when (ex is DbUpdateException or DbException)
         {
