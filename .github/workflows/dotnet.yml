@@ -1,5 +1,8 @@
 name: Build solution
 
+env:
+  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
 # Este workflow se ejecuta cuando alguien hace push o crea un pull request
 # hacia la rama principal. La idea es verificar automáticamente que el proyecto
 # sigue compilando y que las pruebas siguen pasando.
@@ -42,7 +45,7 @@ jobs:
       # 4) Instala la herramienta de SonarScanner para .NET. Si el secreto
       # SONAR_TOKEN no existe, esta parte se omite para que el pipeline no falle.
       - name: Install SonarScanner
-        if: ${{ secrets.SONAR_TOKEN != '' }}
+        if: ${{ env.SONAR_TOKEN != '' }}
         shell: bash
         run: |
           dotnet tool install --global dotnet-sonarscanner
@@ -51,15 +54,13 @@ jobs:
       # 5) Si no hay token de SonarCloud configurado, avisamos al usuario pero
       # el flujo sigue funcionando normalmente.
       - name: SonarCloud analysis skipped
-        if: ${{ secrets.SONAR_TOKEN == '' }}
+        if: ${{ env.SONAR_TOKEN == '' }}
         run: echo "Skipping SonarCloud analysis because SONAR_TOKEN is not configured."
 
       # 6) Inicia la analítica de SonarCloud antes de compilar para que el
       # análisis cubra la solución completa.
       - name: Begin SonarCloud analysis
-        if: ${{ secrets.SONAR_TOKEN != '' }}
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        if: ${{ env.SONAR_TOKEN != '' }}
         run: |
           export PATH="$PATH:$HOME/.dotnet/tools"
           dotnet sonarscanner begin \
@@ -83,9 +84,7 @@ jobs:
       # 9) Cierra la analítica de SonarCloud para finalizar el análisis y enviar
       # los resultados al proyecto configurado en SonarCloud.
       - name: End SonarCloud analysis
-        if: ${{ secrets.SONAR_TOKEN != '' }}
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        if: ${{ env.SONAR_TOKEN != '' }}
         run: |
           export PATH="$PATH:$HOME/.dotnet/tools"
           dotnet sonarscanner end /d:sonar.token="${SONAR_TOKEN}"
