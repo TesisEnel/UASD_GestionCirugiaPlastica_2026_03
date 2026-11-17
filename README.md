@@ -1,2 +1,2 @@
-Hola a todos de parte de Leanny y Andhy
-Readme inicial
+HOLA A TODOS DE PARTE DE Leanny y Andhy
+README inicial
