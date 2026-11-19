@@ -6,7 +6,7 @@ namespace GestionCirugiaPlastica.Api.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-[Authorize(Roles = "Doctor")]
+[Authorize(Roles = "Doctora,AsistenteClinico")]
 public class PreoperatoriosController(
     PreoperatoriosServices preoperatoriosService
 ) : ControllerBase

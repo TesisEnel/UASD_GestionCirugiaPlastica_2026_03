@@ -6,7 +6,7 @@ namespace GestionCirugiaPlastica.Api.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-[Authorize(Roles = "Doctor")]
+[Authorize(Roles = "Doctora")]
 public class RolesController(
     RolesServices rolesService
 ) : ControllerBase

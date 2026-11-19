@@ -11,37 +11,34 @@
     <main class="main-content">
 
         <header class="dashboard-header">
-
-            <div class="header-welcome">
-
-                <div class="doctor-avatar">
-                    <i class="fa-solid fa-user-doctor"></i>
-                </div>
-
-                <div><h2>Bienvenido</h2><p>Panel de control del consultorio</p></div>
-
-            </div>
-
-            <div class="header-actions">
-
-                <div class="search-box">
-                    <i class="fa-solid fa-magnifying-glass"></i>
-
-                    <input type="text"
-                           placeholder="Buscar aquí..." />
-                </div>
-
-                <button class="notification-button"
-                        type="button"
-                        title="Notificaciones">
-
-                    <i class="fa-regular fa-bell"></i>
-                    <span class="notification-badge"></span>
-
-                </button>
-
-            </div>
-
+            <AuthorizeView Roles="Doctora,Secretaria">
+                <Authorized>
+                    <div class="header-welcome">
+                        <div class="doctor-avatar"><i class="fa-solid fa-user-doctor"></i></div>
+                        <div><h2>Bienvenido</h2><p>Panel de control del consultorio</p></div>
+                    </div>
+                    <div class="header-actions">
+                        <div class="search-box"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Buscar aquí..." /></div>
+                        <button class="notification-button" type="button" title="Notificaciones"><i class="fa-regular fa-bell"></i><span class="notification-badge"></span></button>
+                    </div>
+                </Authorized>
+            </AuthorizeView>
+            <AuthorizeView Roles="AsistenteClinico">
+                <Authorized>
+                    <div class="header-welcome">
+                        <div class="doctor-avatar"><i class="fa-solid fa-user-nurse"></i></div>
+                        <div><h2>Área clínica</h2><p>Expedientes y seguimiento médico</p></div>
+                    </div>
+                </Authorized>
+            </AuthorizeView>
+            <AuthorizeView Roles="Paciente">
+                <Authorized>
+                    <div class="header-welcome">
+                        <div class="doctor-avatar"><i class="fa-solid fa-user"></i></div>
+                        <div><h2>Mi portal de paciente</h2><p>Consulta tu perfil, citas y recetas</p></div>
+                    </div>
+                </Authorized>
+            </AuthorizeView>
         </header>
 
         <!-- CONTENIDO DE CADA PÁGINA -->
@@ -52,7 +49,7 @@
     </main>
 
     <!-- COLUMNA 3: CALENDARIO Y CITAS -->
-    <AuthorizeView Roles="Doctor,Secretaria">
+    <AuthorizeView>
         <Authorized>
             <aside class="right-panel"><RightCalendarPanel /></aside>
         </Authorized>

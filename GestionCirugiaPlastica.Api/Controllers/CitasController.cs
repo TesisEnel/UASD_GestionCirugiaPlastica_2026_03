@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace GestionCirugiaPlastica.API.Controllers;
 
 [ApiController]
-[Authorize(Roles = "Doctor,Secretaria")]
+[Authorize(Roles = "Doctora,Secretaria")]
 [Route("api/[controller]")]
 public class CitasController : ControllerBase
 {
@@ -56,6 +56,24 @@ public class CitasController : ControllerBase
         return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
+    // PUT: api/Citas/5
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> Put(int id, [FromBody] Cita cita)
+    {
+        if (id != cita.CitaId)
+            return BadRequest("El ID de la ruta no coincide con el ID de la cita.");
+
+        var existente = await _citasService.Buscar(id);
+        if (existente.Value is null) return NotFound("La cita no existe.");
+
+        var estadosPermitidos = new[] { "Pendiente", "Confirmada", "Llegó", "Atendida", "Completada", "Cancelada" };
+        if (string.IsNullOrWhiteSpace(cita.Estado) || !estadosPermitidos.Contains(cita.Estado.Trim(), StringComparer.OrdinalIgnoreCase))
+            return BadRequest("El estado indicado no es válido.");
+
+        var resultado = await _citasService.Guardar(cita);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
+    }
+
     // PATCH: api/Citas/5/estado
     [HttpPatch("{id:int}/estado")]
     public async Task<IActionResult> ActualizarEstado(
@@ -69,6 +87,8 @@ public class CitasController : ControllerBase
         {
         "Pendiente",
         "Confirmada",
+        "Llegó",
+        "Atendida",
         "Completada",
         "Cancelada"
     };

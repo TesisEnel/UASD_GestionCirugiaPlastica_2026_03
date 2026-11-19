@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace GestionCirugiaPlastica.API.Controllers;
 
 [ApiController]
-[Authorize(Roles = "Doctor")]
+[Authorize(Roles = "Doctora")]
 [Route("api/[controller]")]
 public class GastosController(GastosService gastosService) : ControllerBase
 {

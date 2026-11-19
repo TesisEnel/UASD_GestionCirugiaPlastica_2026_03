@@ -20,10 +20,25 @@ public class PagosServices(
         new("Pago.MontoInvalido", "El monto del pago debe ser mayor que cero.");
 
     private static readonly Error DestinoRequerido =
-        new("Pago.DestinoRequerido", "El pago debe estar asociado a una cirugía o a una cita.");
+        new("Pago.DestinoRequerido", "El pago debe estar asociado a un paciente, una cirugía o una cita.");
 
     private static readonly Error DestinoDuplicado =
         new("Pago.DestinoDuplicado", "El pago no puede estar asociado a una cirugía y a una cita a la vez.");
+
+    private static readonly Error PacienteNoExiste =
+        new("Pago.PacienteNoExiste", "El paciente indicado no existe.");
+
+    private static readonly Error DestinoPacienteNoCoincide =
+        new("Pago.DestinoPacienteNoCoincide", "El paciente debe coincidir con el paciente de la cita o cirugía seleccionada.");
+
+    private static readonly Error SeguroPacienteNoCoincide =
+        new("Pago.SeguroPacienteNoCoincide", "La aseguradora seleccionada no está vinculada a este paciente o no está activa.");
+
+    private static readonly Error MontoSeguroInvalido =
+        new("Pago.MontoSeguroInvalido", "La cobertura del seguro debe estar entre cero y el monto total.");
+
+    private static readonly Error EstadoInvalido =
+        new("Pago.EstadoInvalido", "El estado debe ser Pagado o Pendiente.");
 
     private static readonly Error TextoMuyLargo =
         new("Pago.TextoMuyLargo", "El método de pago y el concepto no pueden pasar de 250 caracteres.");
@@ -53,11 +68,18 @@ public class PagosServices(
         if (pago.Monto <= 0)
             return Result.Failure(MontoInvalido);
 
-        if (pago.CirugiaId == null && pago.CitaId == null)
+        if (pago.CirugiaId == null && pago.CitaId == null && pago.PacienteId == null)
             return Result.Failure(DestinoRequerido);
 
         if (pago.CirugiaId.HasValue && pago.CitaId.HasValue)
             return Result.Failure(DestinoDuplicado);
+
+        if (pago.MontoSeguro < 0 || pago.MontoSeguro > pago.Monto)
+            return Result.Failure(MontoSeguroInvalido);
+
+        var estado = string.IsNullOrWhiteSpace(pago.Estado) ? "Pagado" : pago.Estado.Trim();
+        if (estado is not ("Pagado" or "Pendiente"))
+            return Result.Failure(EstadoInvalido);
 
         if (pago.MetodoPago?.Trim().Length > 250 ||
             pago.Concepto?.Trim().Length > 250)
@@ -65,23 +87,51 @@ public class PagosServices(
 
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
+        int? destinoPacienteId = pago.PacienteId;
+        Cita? citaDestino = null;
+
+        if (pago.PacienteId.HasValue && !await contexto.Pacientes.AnyAsync(p => p.PacienteId == pago.PacienteId.Value))
+            return Result.Failure(PacienteNoExiste);
+
         if (pago.CirugiaId.HasValue)
         {
-            bool cirugiaExiste = await contexto.Cirugias
-                .AnyAsync(c => c.CirugiaId == pago.CirugiaId.Value);
+            var cirugiaPacienteId = await contexto.Cirugias
+                .Where(c => c.CirugiaId == pago.CirugiaId.Value)
+                .Select(c => (int?)c.PacienteId)
+                .FirstOrDefaultAsync();
 
-            if (!cirugiaExiste)
+            if (cirugiaPacienteId is null)
                 return Result.Failure(CirugiaNoExiste);
+
+            if (destinoPacienteId.HasValue && destinoPacienteId != cirugiaPacienteId)
+                return Result.Failure(DestinoPacienteNoCoincide);
+
+            destinoPacienteId = cirugiaPacienteId;
         }
 
         if (pago.CitaId.HasValue)
         {
-            bool citaExiste = await contexto.Citas
-                .AnyAsync(c => c.CitaId == pago.CitaId.Value);
+            citaDestino = await contexto.Citas
+                .FirstOrDefaultAsync(c => c.CitaId == pago.CitaId.Value);
 
-            if (!citaExiste)
+            if (citaDestino is null)
                 return Result.Failure(CitaNoExiste);
+
+            if (destinoPacienteId.HasValue && destinoPacienteId.Value != citaDestino.PacienteId)
+                return Result.Failure(DestinoPacienteNoCoincide);
+
+            destinoPacienteId = citaDestino.PacienteId;
         }
+
+        if (!destinoPacienteId.HasValue)
+            return Result.Failure(DestinoRequerido);
+
+        if (pago.SeguroId.HasValue && !await contexto.PacienteSeguros.AnyAsync(ps =>
+                ps.PacienteId == destinoPacienteId.Value && ps.SeguroId == pago.SeguroId.Value && ps.Seguro.Activo))
+            return Result.Failure(SeguroPacienteNoCoincide);
+
+        pago.PacienteId = destinoPacienteId;
+        pago.Estado = estado;
 
         try
         {
@@ -95,7 +145,11 @@ public class PagosServices(
                     Fecha = DateTime.Now,
                     CirugiaId = pago.CirugiaId,
                     CitaId = pago.CitaId,
+                    PacienteId = destinoPacienteId,
+                    SeguroId = pago.SeguroId,
                     Monto = pago.Monto,
+                    MontoSeguro = pago.MontoSeguro,
+                    Estado = estado,
                     MetodoPago = pago.MetodoPago?.Trim(),
                     Concepto = pago.Concepto?.Trim()
                 });
@@ -111,10 +165,17 @@ public class PagosServices(
                 // La fecha original del pago no se modifica.
                 existente.CirugiaId = pago.CirugiaId;
                 existente.CitaId = pago.CitaId;
+                existente.PacienteId = destinoPacienteId;
+                existente.SeguroId = pago.SeguroId;
                 existente.Monto = pago.Monto;
+                existente.MontoSeguro = pago.MontoSeguro;
+                existente.Estado = estado;
                 existente.MetodoPago = pago.MetodoPago?.Trim();
                 existente.Concepto = pago.Concepto?.Trim();
             }
+
+            if (citaDestino is not null)
+                citaDestino.EstadoPago = estado;
 
             await contexto.SaveChangesAsync();
 
@@ -132,10 +193,7 @@ public class PagosServices(
     {
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
-        var pago = await contexto.Pagos
-            .AsNoTracking()
-            .Include(p => p.Cirugia)
-            .Include(p => p.Cita)
+        var pago = await ConRelaciones(contexto)
             .FirstOrDefaultAsync(p => p.PagoId == pagoId);
 
         return Result<Pago?>.Success(pago);
@@ -147,10 +205,7 @@ public class PagosServices(
     {
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
-        var pagos = await contexto.Pagos
-            .AsNoTracking()
-            .Include(p => p.Cirugia)
-            .Include(p => p.Cita)
+        var pagos = await ConRelaciones(contexto)
             .Where(criterio)
             .OrderByDescending(p => p.Fecha)
             .ThenByDescending(p => p.PagoId)
@@ -164,10 +219,7 @@ public class PagosServices(
     {
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
-        var pagos = await contexto.Pagos
-            .AsNoTracking()
-            .Include(p => p.Cirugia)
-            .Include(p => p.Cita)
+        var pagos = await ConRelaciones(contexto)
             .Where(p => p.CirugiaId == cirugiaId)
             .OrderByDescending(p => p.Fecha)
             .ThenByDescending(p => p.PagoId)
@@ -181,10 +233,7 @@ public class PagosServices(
     {
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
-        var pagos = await contexto.Pagos
-            .AsNoTracking()
-            .Include(p => p.Cirugia)
-            .Include(p => p.Cita)
+        var pagos = await ConRelaciones(contexto)
             .Where(p => p.CitaId == citaId)
             .OrderByDescending(p => p.Fecha)
             .ThenByDescending(p => p.PagoId)
@@ -201,10 +250,7 @@ public class PagosServices(
         DateTime inicio = fecha.Date;
         DateTime fin = inicio.AddDays(1);
 
-        var pagos = await contexto.Pagos
-            .AsNoTracking()
-            .Include(p => p.Cirugia)
-            .Include(p => p.Cita)
+        var pagos = await ConRelaciones(contexto)
             .Where(p => p.Fecha >= inicio && p.Fecha < fin)
             .OrderByDescending(p => p.Fecha)
             .ThenByDescending(p => p.PagoId)
@@ -226,10 +272,7 @@ public class PagosServices(
         DateTime inicio = fechaInicio.Date;
         DateTime fin = fechaFin.Date.AddDays(1);
 
-        var pagos = await contexto.Pagos
-            .AsNoTracking()
-            .Include(p => p.Cirugia)
-            .Include(p => p.Cita)
+        var pagos = await ConRelaciones(contexto)
             .Where(p => p.Fecha >= inicio && p.Fecha < fin)
             .OrderByDescending(p => p.Fecha)
             .ThenByDescending(p => p.PagoId)
@@ -237,6 +280,14 @@ public class PagosServices(
 
         return Result<List<Pago>>.Success(pagos);
     }
+
+    private static IQueryable<Pago> ConRelaciones(GestionCirugiaPlasticaContext contexto) =>
+        contexto.Pagos
+            .AsNoTracking()
+            .Include(p => p.Paciente)
+            .Include(p => p.Seguro)
+            .Include(p => p.Cirugia).ThenInclude(c => c!.Paciente)
+            .Include(p => p.Cita).ThenInclude(c => c!.Paciente);
 
     // ── Eliminar ───────────────────────────────────────────────────────────
     public async Task<Result> Eliminar(int pagoId)

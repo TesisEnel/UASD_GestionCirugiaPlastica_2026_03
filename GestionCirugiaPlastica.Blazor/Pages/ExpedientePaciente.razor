@@ -1,7 +1,9 @@
 @page "/pacientes/expediente/{Criterio}"
-@attribute [Authorize(Roles = "Doctor")]
+@page "/expedientes"
+@attribute [Authorize(Roles = "Doctora,AsistenteClinico")]
 @inject HttpClient Http
 @inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthenticationStateProvider
 @using System.Text.Json
 @using Microsoft.AspNetCore.Components.Forms
 
@@ -9,28 +11,37 @@
 
 <div class="expediente-page">
     <div class="expediente-header">
-        <div><a href="/pacientes">← Pacientes</a><h1>Expediente clínico</h1></div>
+        <div><a href="/expedientes">← Buscar expedientes</a><h1>Expediente clínico</h1></div>
         <input class="expediente-search" placeholder="Buscar por nombre o cédula" @bind="_busqueda" @bind:event="oninput" @onkeydown="BuscarConEnter" />
         <button class="expediente-action" @onclick="BuscarAsync">Buscar</button>
     </div>
 
     @if (_loading) { <p>Cargando expediente...</p> }
-    else if (_expediente is null) { <p class="expediente-error">@_error</p> }
+    else if (_expediente is null) { <section class="expediente-card"><p class="expediente-error">@(_error ?? "Busca un paciente por nombre, cédula o ID para abrir su expediente clínico.")</p></section> }
     else
     {
         <section class="expediente-persona">
             <div><span>Paciente</span><h2>@_expediente.Paciente.Nombre @_expediente.Paciente.Apellido</h2></div>
             <div><span>Cédula</span><strong>@(_expediente.Paciente.Cedula ?? "—")</strong></div>
-            <div><span>Seguro</span><strong>@(_expediente.Seguro.TieneSeguro ? "Registrado" : "Sin seguro registrado")</strong></div>
+            @if (_esDoctora)
+            {
+                <div><span>Seguro</span><strong>@(_expediente.Seguro.TieneSeguro ? "Registrado" : "Sin seguro registrado")</strong></div>
+            }
         </section>
 
         <div class="expediente-tabs" role="tablist">
-            <button class="@TabClass("personal")" @onclick='() => _tab = "personal"'>Datos personales y seguro</button>
+            @if (_esDoctora)
+            {
+                <button class="@TabClass("personal")" @onclick='() => _tab = "personal"'>Datos personales y seguro</button>
+            }
             <button class="@TabClass("operaciones")" @onclick='() => _tab = "operaciones"'>Procedimientos y operaciones</button>
-            <button class="@TabClass("citas")" @onclick='() => _tab = "citas"'>Historial de citas</button>
+            @if (_esDoctora)
+            {
+                <button class="@TabClass("citas")" @onclick='() => _tab = "citas"'>Historial de citas</button>
+            }
         </div>
 
-        @if (_tab == "personal")
+        @if (_tab == "personal" && _esDoctora)
         {
             <EditForm Model="_expediente.Paciente" OnValidSubmit="GuardarPacienteAsync" class="expediente-card">
                 <DataAnnotationsValidator />
@@ -112,7 +123,7 @@
                 </EditForm>
             </section>
         }
-        else
+        else if (_tab == "citas" && _esDoctora)
         {
             <section class="expediente-card">
                 <h2>Citas anteriores y próximas</h2>
@@ -126,9 +137,10 @@
 </div>
 
 @code {
-    [Parameter] public string Criterio { get; set; } = "";
+    [Parameter] public string? Criterio { get; set; } = "";
     private ExpedienteDto? _expediente;
     private bool _loading = true;
+    private bool _esDoctora;
     private string? _error;
     private string? _status;
     private string _tab = "personal";
@@ -138,12 +150,27 @@
 
     protected override async Task OnParametersSetAsync()
     {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _esDoctora = authState.User.IsInRole("Doctora");
+        if (!_esDoctora)
+            _tab = "operaciones";
+
         _loading = true;
+        _busqueda = Criterio ?? "";
+        if (string.IsNullOrWhiteSpace(Criterio))
+        {
+            _expediente = null;
+            _error = null;
+            try { await CargarProcedimientosAsync(); }
+            catch (HttpRequestException) { _error = "No se pudo cargar la lista de procedimientos."; }
+            finally { _loading = false; }
+            return;
+        }
+
         try
         {
             await CargarExpedienteAsync();
             _error = null;
-            _busqueda = Criterio;
             await CargarProcedimientosAsync();
         }
         catch (HttpRequestException) { _error = "No se pudo cargar el expediente."; }
@@ -162,7 +189,7 @@
 
     private async Task CargarExpedienteAsync()
     {
-        _expediente = await Http.GetFromJsonAsync<ExpedienteDto>($"api/Pacientes/expediente/{Uri.EscapeDataString(Criterio)}");
+        _expediente = await Http.GetFromJsonAsync<ExpedienteDto>($"api/Pacientes/expediente/{Uri.EscapeDataString(Criterio ?? "")}");
         if (_expediente is null) return;
         foreach (var foto in _expediente.Fotografias)
         {

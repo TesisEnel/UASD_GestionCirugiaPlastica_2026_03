@@ -157,6 +157,10 @@ public partial class GestionCirugiaPlasticaContext : DbContext
             entity.HasKey(e => e.PacienteId).HasName("PK__Paciente__9353C01FF2D94C07");
 
             entity.Property(e => e.FechaRegistro).HasDefaultValueSql("(getdate())");
+            entity.HasIndex(e => e.Cedula)
+                .HasDatabaseName("UX_Pacientes_Cedula_NotNull")
+                .IsUnique()
+                .HasFilter("[Cedula] IS NOT NULL");
         });
 
         modelBuilder.Entity<PacienteSeguro>(entity =>
@@ -179,10 +183,18 @@ public partial class GestionCirugiaPlasticaContext : DbContext
             entity.HasKey(e => e.PagoId).HasName("PK__Pagos__F00B61381094ED38");
 
             entity.Property(e => e.Fecha).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.MontoSeguro).HasDefaultValue(0m);
+            entity.Property(e => e.Estado).HasDefaultValue("Pagado");
 
             entity.HasOne(d => d.Cirugia).WithMany(p => p.Pagos).HasConstraintName("FK_Pagos_Cirugias");
 
             entity.HasOne(d => d.Cita).WithMany(p => p.Pagos).HasConstraintName("FK_Pagos_Citas");
+
+            entity.HasOne(d => d.Paciente).WithMany(p => p.Pago)
+                .HasConstraintName("FK_Pagos_Pacientes");
+
+            entity.HasOne(d => d.Seguro).WithMany()
+                .HasConstraintName("FK_Pagos_Seguros");
         });
 
         modelBuilder.Entity<Preoperatorio>(entity =>
@@ -242,6 +254,7 @@ public partial class GestionCirugiaPlasticaContext : DbContext
 
             entity.Property(e => e.Activo).HasDefaultValue(true);
             entity.Property(e => e.FechaRegistro).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.FotoUrl).HasMaxLength(500);
 
             entity.HasOne(d => d.Rol).WithMany(p => p.Usuarios)
                 .OnDelete(DeleteBehavior.ClientSetNull)

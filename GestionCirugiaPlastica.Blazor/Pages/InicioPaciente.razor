@@ -1,0 +1,100 @@
+@page "/inicio-paciente"
+@attribute [Authorize(Roles = "Paciente")]
+@using System.Net.Http.Json
+@inject HttpClient Http
+
+<PageTitle>Inicio | Tanger Clinic</PageTitle>
+<div class="patient-portal med-page">
+    <header class="med-page-header">
+        <div><h1>Hola, @(_perfil?.Nombre ?? "paciente")</h1><p>Este es el resumen de tu atención en Tanger Clinic.</p></div>
+    </header>
+
+    @if (_loading)
+    {
+        <section class="card p-4"><p class="mb-0">Cargando tu resumen...</p></section>
+    }
+    else if (_error is not null)
+    {
+        <div class="alert alert-danger" role="alert">@_error</div>
+    }
+    else if (_perfil is null || !_perfil.Vinculado)
+    {
+        <section class="card p-4 patient-unlinked" role="status">
+            <h2>Tu cuenta todavía no está vinculada</h2>
+            <p class="mb-0">Contacta a recepción para asociarla a tu ficha. No necesitas correo electrónico para completar la vinculación.</p>
+        </section>
+    }
+    else
+    {
+        <div class="patient-home-grid">
+            <section class="card p-4 patient-home-summary">
+                <div class="patient-home-icon"><i class="fa-solid fa-shield-heart"></i></div>
+                <div>
+                    <h2>Estado de tu seguro</h2>
+                    <strong>@(_perfil.TieneSeguro ? "Tienes seguro médico" : "Paciente privado · Sin seguro")</strong>
+                    @if (_perfil.TieneSeguro)
+                    {
+                        @if (_polizas.Count == 0) { <p>No hay una aseguradora vinculada. Recepción puede ayudarte a completar los datos.</p> }
+                        else { <p>@string.Join(", ", _polizas.Select(p => p.Seguro).Distinct())</p> }
+                    }
+                </div>
+            </section>
+
+            <section class="card p-4 patient-home-summary">
+                <div class="patient-home-icon"><i class="fa-regular fa-calendar-check"></i></div>
+                <div>
+                    <h2>Tu próxima cita</h2>
+                    @if (ProximaCita is null)
+                    {
+                        <p>No tienes citas próximas.</p>
+                    }
+                    else
+                    {
+                        <strong>@ProximaCita.Fecha.ToString("dddd dd 'de' MMMM, HH:mm")</strong>
+                        <p>@(ProximaCita.TipoCita ?? "Cita") · @ProximaCita.Estado</p>
+                    }
+                </div>
+            </section>
+        </div>
+
+        <section class="card p-4 patient-home-actions">
+            <div><h2>¿Qué necesitas hacer?</h2><p>Consulta tus datos o solicita una nueva cita cuando te convenga.</p></div>
+            <div class="patient-home-action-buttons">
+                <a class="med-primary" href="/mi-portal">Ver mi perfil, citas y recetas</a>
+                <a class="med-secondary" href="/mi-portal#agendar-cita">Agendar una cita</a>
+            </div>
+        </section>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private ProfileDto? _perfil;
+    private List<AppointmentDto> _citas = new();
+    private List<InsuranceDto> _polizas = new();
+    private string? _error;
+    private AppointmentDto? ProximaCita => _citas.Where(c => c.Fecha >= DateTime.Now).OrderBy(c => c.Fecha).FirstOrDefault();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _perfil = await Http.GetFromJsonAsync<ProfileDto>("api/PortalPaciente/perfil");
+            if (_perfil?.Vinculado == true)
+            {
+                var citasTask = Http.GetFromJsonAsync<List<AppointmentDto>>("api/PortalPaciente/citas");
+                var segurosTask = Http.GetFromJsonAsync<List<InsuranceDto>>("api/PortalPaciente/seguro");
+                await Task.WhenAll(citasTask, segurosTask);
+                _citas = await citasTask ?? new();
+                _polizas = await segurosTask ?? new();
+            }
+        }
+        catch (HttpRequestException) { _error = "No se pudo cargar tu resumen. Intenta de nuevo más tarde."; }
+        catch (System.Text.Json.JsonException) { _error = "El servidor devolvió datos con un formato inesperado."; }
+        finally { _loading = false; }
+    }
+
+    private sealed class ProfileDto { public bool Vinculado { get; set; } public string? Nombre { get; set; } public bool TieneSeguro { get; set; } }
+    private sealed class AppointmentDto { public DateTime Fecha { get; set; } public string? TipoCita { get; set; } public string Estado { get; set; } = ""; }
+    private sealed class InsuranceDto { public string Seguro { get; set; } = ""; }
+}

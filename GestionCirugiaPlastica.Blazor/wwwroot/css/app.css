@@ -2,7 +2,7 @@ html, body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
 
-.login-page { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: #f7f3f4; }
+.login-page { min-height: 100vh; box-sizing: border-box; display: flex; justify-content: center; align-items: flex-start; padding: clamp(48px, 10vh, 88px) 24px 24px; background: #f7f3f4; }
 .login-card { width: min(100%, 420px); display: flex; flex-direction: column; gap: 12px; padding: 36px; border-radius: 18px; background: #fff; box-shadow: 0 12px 40px rgba(54,56,58,.10); }
 .login-brand { color: #9e6e79; font-size: 32px; text-align: center; }
 .login-card h1, .login-card p { margin: 0; text-align: center; }
@@ -13,6 +13,41 @@ html, body {
 .login-card button { margin-top: 8px; padding: 12px; border: 0; border-radius: 9px; background: #9e6e79; color: white; font-weight: 600; }
 .login-card button:disabled { opacity: .65; }
 .login-error { padding: 10px; border-radius: 8px; background: #fbe9e9; color: #b75d5d; font-size: 13px; }
+.login-register-link { margin-top: 5px; color: #6F696B; font-size: 13px; text-align: center; }
+.login-register-link a { color: #68414A; font-weight: 700; text-decoration: none; }
+.login-register-link a:hover { color: #9E405E; text-decoration: underline; }
+.registration-page { align-items: flex-start; }
+.account-card { width: min(100%, 520px); }
+.account-card h1 { margin: 0; }
+.register-success { padding: 11px 13px; border-radius: 8px; background: #EAF5ED; color: #356347; font-size: 13px; }
+.register-success a { color: #28583A; font-weight: 700; }
+.account-page { max-width: 1180px; margin: 0 auto; }
+.profile-page-grid { display:grid; grid-template-columns:minmax(230px, .7fr) minmax(0, 1.6fr); gap:16px; align-items:start; }
+.profile-photo-card { display:flex; flex-direction:column; align-items:center; gap:11px; text-align:center; }
+.profile-photo-preview { display:flex; width:116px; height:116px; align-items:center; justify-content:center; overflow:hidden; border-radius:50%; background:#F8E9ED; color:#9E6E79; font-size:42px; }
+.profile-photo-preview img { display:block; width:100%; height:100%; border-radius:50%; object-fit:cover; }
+.profile-photo-card h2 { margin:0; color:#36383A; font-size:18px; }
+.profile-role-badge { padding:5px 10px; border-radius:20px; background:#F8E9ED; color:#68414A; font-size:12px; font-weight:700; }
+.profile-photo-card input[type=file] { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; clip-path:inset(50%); }
+.profile-file-label { padding:8px 12px; border:1px solid #68414A; border-radius:8px; color:#68414A; font-size:13px; font-weight:700; cursor:pointer; }
+.profile-file-label:hover { background:#F8E9ED; }
+.profile-photo-card .med-primary { margin:0; }
+.profile-file-name,.profile-photo-card small { margin:0; color:#777273; font-size:12px; overflow-wrap:anywhere; }
+.account-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:13px; margin-bottom:16px; }
+.account-form-grid label { display:flex; min-width:0; flex-direction:column; gap:6px; color:#68414A; font-size:13px; font-weight:700; }
+.account-form-grid input { min-width:0; width:100%; padding:9px 11px; border:1px solid #E7DDE0; border-radius:8px; color:#36383A; background:#fff; font-weight:400; }
+.account-form-grid input:disabled { background:#F8F5F6; color:#777273; }
+.med-card h3 span { color:#777273; font-size:12px; font-weight:400; }
+.account-help { margin:-6px 0 13px; color:#777273; font-size:12px; }
+.account-page .validation-summary-errors { margin-bottom:12px; color:#A33E50; font-size:13px; }
+.configuration-toolbar { display:flex; justify-content:space-between; align-items:center; gap:14px; margin-bottom:12px; }
+.configuration-toolbar h2 { margin:0; }
+.configuration-toolbar .med-search { max-width:340px; }
+.configuration-table td small { display:block; margin-top:4px; color:#777273; }
+.configuration-role-control { display:flex; align-items:center; gap:7px; }
+.configuration-role-control select { min-width:120px; padding:7px 9px; border:1px solid #E7DDE0; border-radius:8px; color:#36383A; background:#fff; }
+.configuration-role-control .med-secondary { padding:7px 9px; }
+.configuration-note { margin:14px 0 0; color:#777273; font-size:12px; }
 
 h1:focus {
     outline: none;
@@ -150,7 +185,95 @@ code {
 .receta-drugs > div { display:flex; flex-direction:column; gap:4px; padding:12px; border-left:3px solid #9E6E79; border-radius:8px; background:#FCF8F9; }
 .receta-drugs span,.receta-drugs small { color:#6F696B; }
 .med-form-actions { display:flex; gap:8px; margin-top:14px; }
+.surgery-filters { display:grid; grid-template-columns:repeat(4,minmax(150px,1fr)); gap:12px; align-items:end; }
+.surgery-filters label { display:flex; flex-direction:column; gap:6px; color:#68414A; font-size:12px; font-weight:700; }
+.surgery-filters input,.surgery-filters select { min-width:0; width:100%; padding:9px 11px; border:1px solid #E7DDE0; border-radius:8px; color:#36383A; background:#fff; font-weight:400; }
+.surgery-photo-gallery { display:flex; align-items:center; flex-wrap:wrap; gap:7px; min-height:40px; }
+.surgery-photo-gallery-compact { min-width:130px; }
+.surgery-photo-thumb { display:block; width:58px; height:50px; padding:0; overflow:hidden; border:1px solid #D7BEC5; border-radius:7px; background:#FCF8F9; cursor:zoom-in; }
+.surgery-photo-thumb img { display:block; width:100%; height:100%; object-fit:cover; }
+.surgery-no-photos { color:#777273; font-size:11px; white-space:nowrap; }
+.surgery-form-photos { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin:4px 0 18px; padding-top:14px; border-top:1px solid #E7DDE0; }
+.surgery-form-photos h3 { width:100%; margin:0; color:#68414A; font-size:15px; }
+.surgery-form-photos p { margin:0; color:#6F696B; font-size:13px; }
+.photo-upload-control { position:relative; display:inline-flex; align-items:center; justify-content:center; min-height:34px; padding:7px 10px; overflow:hidden; border:1px solid #68414A; border-radius:8px; background:#fff; color:#68414A; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap; }
+.photo-upload-control:hover { background:#F8E9ED; }
+.photo-upload-control input[type=file] { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }
+.photo-upload-compact { min-height:29px; margin-top:7px; padding:5px 8px; font-size:11px; }
+.surgery-photo-modal { position:fixed; inset:0; z-index:2000; display:flex; align-items:center; justify-content:center; padding:24px; background:rgba(30,22,24,.78); }
+.surgery-photo-modal-content { position:relative; display:flex; max-width:min(100%,1000px); max-height:100%; flex-direction:column; align-items:center; gap:10px; padding:18px; border-radius:14px; background:#fff; box-shadow:0 12px 50px rgba(0,0,0,.3); }
+.surgery-photo-modal-content img { display:block; max-width:100%; max-height:calc(100vh - 120px); object-fit:contain; }
+.surgery-photo-modal-content p { margin:0; color:#68414A; font-size:13px; }
+.surgery-photo-modal-close { position:absolute; top:7px; right:9px; z-index:1; width:34px; height:34px; border:0; border-radius:50%; background:#68414A; color:#fff; font-size:24px; line-height:1; cursor:pointer; }
+.payment-entry { display:flex; flex-direction:column; gap:14px; }
+.payment-entry h2,.payment-history-heading h2 { margin:0; color:#36383A; font-size:19px; }
+.payment-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; align-items:end; }
+.payment-form-grid > label { display:flex; flex-direction:column; gap:6px; color:#68414A; font-size:13px; font-weight:700; }
+.payment-form-grid input,.payment-form-grid select { min-width:0; width:100%; padding:9px 11px; border:1px solid #E7DDE0; border-radius:8px; color:#36383A; background:#fff; font-weight:400; }
+.payment-insurance { display:flex; grid-column:1/-1; flex-direction:column; gap:8px; padding:12px 14px; border-radius:9px; font-size:13px; }
+.payment-insurance.has-insurance { border:1px solid #D7BEC5; background:#FCF8F9; color:#68414A; }
+.payment-insurance.private-patient { border:1px solid #D9E8DC; background:#F4FAF5; color:#356347; }
+.payment-insurance label { display:flex; max-width:420px; flex-direction:column; gap:5px; font-weight:600; }
+.payment-insurance select { padding:8px 10px; border:1px solid #D7BEC5; border-radius:7px; background:#fff; color:#36383A; }
+.payment-copay { display:flex; min-height:43px; flex-direction:column; justify-content:center; gap:3px; padding:8px 12px; border-left:3px solid #9E6E79; border-radius:7px; background:#FCF8F9; color:#68414A; }
+.payment-copay span { font-size:11px; }
+.payment-copay strong { font-size:17px; }
+.payment-full { grid-column:1/-1; }
+.payment-entry > .med-primary { align-self:flex-start; }
+.payment-hint { margin:0; color:#777273; font-size:13px; }
+.payment-success { padding:11px 14px; border-radius:8px; background:#EAF5ED; color:#356347; }
+.payment-history-heading { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:14px; }
+.payment-history-heading p { margin:5px 0 0; color:#777273; font-size:13px; }
+.payment-history-heading .med-search { max-width:340px; }
+.payment-table small { color:#777273; }
+.payment-status { display:inline-block; padding:5px 9px; border-radius:20px; font-size:11px; font-weight:700; }
+.payment-status.paid { background:#EAF5ED; color:#356347; }
+.payment-status.pending { background:#FFF4DF; color:#946C24; }
+.patient-portal { max-width:1180px; margin:0 auto; }
+.patient-unlinked { border-color:#E7DDE0; background:#FCF8F9; color:#68414A; }
+.patient-unlinked h2 { font-size:19px; }
+.patient-profile-heading { display:flex; align-items:center; gap:13px; margin-bottom:18px; }
+.patient-profile-avatar { display:flex; width:48px; height:48px; min-width:48px; align-items:center; justify-content:center; border-radius:50%; background:#F8E9ED; color:#9E6E79; font-size:20px; }
+.patient-profile-heading h2 { margin:0; font-size:20px; }
+.patient-profile-heading span { display:block; margin-top:4px; color:#777273; font-size:13px; }
+.patient-profile-data { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin:0; }
+.patient-profile-data > div { padding:12px; border:1px solid #E7DDE0; border-radius:9px; background:#FCF8F9; }
+.patient-profile-data dt { color:#777273; font-size:11px; }
+.patient-profile-data dd { margin:5px 0 0; color:#36383A; overflow-wrap:anywhere; }
+.patient-profile-data dd strong { color:#68414A; }
+.patient-insurance-note { margin:14px 0 0; color:#68414A; font-size:13px; }
+.patient-insurance-list { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:10px; margin-top:14px; }
+.patient-insurance-list > div { display:flex; flex-direction:column; gap:4px; padding:12px; border-left:3px solid #9E6E79; border-radius:8px; background:#FCF8F9; font-size:13px; }
+.patient-insurance-list strong { color:#68414A; }
+.patient-insurance-list span { color:#6F696B; }
+.patient-booking-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.patient-booking-grid label { display:flex; flex-direction:column; gap:6px; color:#68414A; font-size:13px; font-weight:600; }
+.patient-booking-grid input,.patient-booking-grid select,.patient-booking-grid textarea { min-width:0; width:100%; padding:9px 11px; border:1px solid #E7DDE0; border-radius:8px; color:#36383A; background:#fff; font-weight:400; }
+.patient-booking-full { grid-column:1/-1; }
+.patient-recipes-section > h2 { margin:0 0 14px; color:#68414A; font-size:19px; }
+.patient-recipe-card header h3 { margin:0 0 12px; color:#68414A; font-size:17px; }
+.patient-recipe-instructions { padding:12px; border-left:3px solid #9E6E79; border-radius:8px; background:#FCF8F9; white-space:pre-wrap; }
+.insurance-actions { display:flex; flex-wrap:wrap; gap:7px; }
+.insurance-actions .med-secondary,.insurance-actions .med-primary { margin:0; padding:7px 10px; font-size:12px; }
+.insurance-note { margin:14px 0 0; color:#777273; font-size:13px; }
+.patient-home-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.patient-home-summary { display:flex; align-items:flex-start; gap:14px; min-height:150px; }
+.patient-home-icon { display:flex; width:44px; height:44px; min-width:44px; align-items:center; justify-content:center; border-radius:12px; background:#F8E9ED; color:#9E6E79; font-size:19px; }
+.patient-home-summary h2,.patient-home-actions h2 { margin:0 0 9px; color:#68414A; font-size:17px; }
+.patient-home-summary strong { display:block; color:#36383A; }
+.patient-home-summary p { margin:7px 0 0; color:#777273; }
+.patient-home-actions { display:flex; justify-content:space-between; align-items:center; gap:18px; }
+.patient-home-actions p { margin:0; color:#777273; }
+.patient-home-action-buttons { display:flex; flex-wrap:wrap; gap:9px; }
+.patient-home-action-buttons .med-primary,.patient-home-action-buttons .med-secondary { display:inline-block; margin:0; }
+.appointment-edit-button { display:block; width:100%; margin:8px 0 0; }
+.insurance-actions { display:flex; flex-wrap:wrap; gap:7px; }
 @media(max-width:800px) { .receta-detail { grid-template-columns:repeat(2,minmax(0,1fr)); } .med-grid { grid-template-columns:1fr; } }
+@media(max-width:900px) { .surgery-filters { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:800px) { .payment-form-grid,.patient-home-grid { grid-template-columns:1fr; } .payment-insurance,.payment-full { grid-column:auto; } .patient-profile-data { grid-template-columns:repeat(2,minmax(0,1fr)); } .patient-home-actions { align-items:flex-start; flex-direction:column; } }
+@media(max-width:520px) { .surgery-filters { grid-template-columns:1fr; } .surgery-photo-modal { padding:10px; } .surgery-photo-modal-content { padding:12px; } .payment-history-heading { align-items:stretch; flex-direction:column; } .payment-history-heading .med-search { max-width:none; } .patient-profile-data,.patient-booking-grid { grid-template-columns:1fr; } .patient-booking-full { grid-column:auto; } }
+@media(max-width:800px) { .profile-page-grid { grid-template-columns:1fr; } .profile-photo-card { max-width:460px; width:100%; justify-self:center; } }
+@media(max-width:620px) { .account-form-grid { grid-template-columns:1fr; } .configuration-toolbar { align-items:stretch; flex-direction:column; } .configuration-toolbar .med-search { max-width:none; } .configuration-role-control { align-items:stretch; flex-direction:column; } }
 
 .form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
     color: var(--bs-secondary-color);

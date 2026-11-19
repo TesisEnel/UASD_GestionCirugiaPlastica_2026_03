@@ -3,73 +3,178 @@
 @inject HttpClient Http
 
 <PageTitle>Mi portal | Tanger Clinic</PageTitle>
-<h1>Mi perfil</h1>
-@if (_loading)
-{
-    <p>Cargando tu información...</p>
-}
-else if (_perfil is null)
-{
-    <p role="alert">No se encontró una ficha de paciente vinculada a esta cuenta.</p>
-}
-else
-{
-    <section class="card p-3 mb-3">
-        <h2>@_perfil.Nombre @_perfil.Apellido</h2>
-        <p>Cédula: @_perfil.Cedula</p>
-        <p>Teléfono: @_perfil.Telefono</p>
-        <h3>Estado del seguro</h3>
-        @if (_polizas.Count == 0) { <p>@(_perfil.TieneSeguro ? "Tiene seguro registrado; consulta con recepción para ver los detalles." : "No tienes pólizas registradas.")</p> }
-        else { @foreach (var poliza in _polizas) { <p>@poliza.Seguro — Póliza @poliza.NumeroPoliza — vence: @(poliza.FechaVencimiento?.ToString("dd/MM/yyyy") ?? "No indicada")</p> } }
-    </section>
-    <section class="card p-3 mb-3">
-        <h2>Próximas citas</h2>
-        @if (_citas.Count == 0) { <p>No tienes próximas citas.</p> }
-        else { <ul>@foreach (var cita in _citas) { <li>@cita.Fecha.ToString("dd/MM/yyyy HH:mm") — @cita.TipoCita (@cita.Estado)</li> }</ul> }
-        <EditForm Model="_nuevaCita" OnValidSubmit="AgendarAsync">
-            <DataAnnotationsValidator />
-            <label>Fecha y hora</label>
-            <InputDate @bind-Value="_nuevaCita.Fecha" />
-            <label>Tipo de cita</label>
-            <InputText @bind-Value="_nuevaCita.TipoCita" />
-            <label>Observaciones</label>
-            <InputText @bind-Value="_nuevaCita.Observaciones" />
-            <button class="btn btn-primary mt-2" type="submit">Solicitar cita</button>
-        </EditForm>
-        @if (_message is not null) { <p role="status">@_message</p> }
-    </section>
-}
+<div class="patient-portal med-page">
+    <header class="med-page-header">
+        <div><h1>Mi portal</h1><p>Tu perfil, tus citas y tus indicaciones médicas</p></div>
+    </header>
+
+    @if (_loading)
+    {
+        <section class="card p-4"><p class="mb-0">Cargando tu información...</p></section>
+    }
+    else if (_error is not null)
+    {
+        <div class="alert alert-danger" role="alert">@_error</div>
+    }
+    else if (_perfil is null || !_perfil.Vinculado)
+    {
+        <section class="card p-4 patient-unlinked" role="status">
+            <h2>No hay una ficha de paciente vinculada</h2>
+            <p>Tu cuenta puede iniciar sesión, pero todavía no está asociada a un perfil clínico. Contacta a recepción para vincularla. No necesitas registrar un correo electrónico para hacerlo.</p>
+            <p class="mb-0">Cuando esté vinculada, aquí podrás consultar tu seguro, tus citas y tus recetas, y solicitar nuevas citas.</p>
+        </section>
+    }
+    else
+    {
+        <section class="card p-4 mb-3 patient-profile-card">
+            <div class="patient-profile-heading"><div class="patient-profile-avatar"><i class="fa-solid fa-user"></i></div><div><h2>@_perfil.Nombre @_perfil.Apellido</h2><span>Perfil de paciente</span></div></div>
+            <dl class="patient-profile-data">
+                <div><dt>Cédula</dt><dd>@(_perfil.Cedula ?? "No registrada")</dd></div>
+                <div><dt>Teléfono</dt><dd>@(_perfil.Telefono ?? "No registrado")</dd></div>
+                <div><dt>Correo electrónico</dt><dd>@(_perfil.Email ?? "No registrado")</dd></div>
+                <div><dt>Estado de seguro</dt><dd><strong>@(_perfil.TieneSeguro ? "Tiene seguro médico" : "Paciente privado · Sin seguro")</strong></dd></div>
+            </dl>
+            @if (_perfil.TieneSeguro)
+            {
+                @if (_polizas.Count == 0)
+                {
+                    <p class="patient-insurance-note">El perfil indica que tienes seguro, pero no hay una póliza vinculada todavía. Recepción puede ayudarte a completar los datos.</p>
+                }
+                else
+                {
+                    <div class="patient-insurance-list">
+                        @foreach (var poliza in _polizas)
+                        {
+                            <div><strong>@poliza.Seguro</strong><span>Póliza: @(poliza.NumeroPoliza ?? "No indicada")</span><span>Vencimiento: @(poliza.FechaVencimiento?.ToString("dd/MM/yyyy") ?? "No indicado")</span></div>
+                        }
+                    </div>
+                }
+            }
+        </section>
+
+        <section class="card p-4 mb-3" id="agendar-cita">
+            <h2>Próximas citas</h2>
+            @if (_citas.Count == 0)
+            {
+                <p>No tienes próximas citas.</p>
+            }
+            else
+            {
+                <div class="table-responsive"><table class="table align-middle"><thead><tr><th>Fecha y hora</th><th>Tipo</th><th>Estado</th></tr></thead><tbody>
+                    @foreach (var cita in _citas)
+                    {
+                        <tr><td>@cita.Fecha.ToString("dd/MM/yyyy HH:mm")</td><td>@(cita.TipoCita ?? "Sin especificar")</td><td>@cita.Estado</td></tr>
+                    }
+                </tbody></table></div>
+            }
+            <h3 class="h5 mt-3">Solicitar una cita</h3>
+            <EditForm Model="_nuevaCita" OnValidSubmit="AgendarAsync">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+                <div class="patient-booking-grid">
+                    <label>Fecha y hora<InputDate TValue="DateTime" Type="InputDateType.DateTimeLocal" @bind-Value="_nuevaCita.Fecha" min="@FechaMinima" /></label>
+                    <label>Tipo de cita<InputSelect @bind-Value="_nuevaCita.TipoCita"><option value="">Selecciona el tipo</option><option>Consulta</option><option>Evaluación</option><option>Seguimiento</option><option>Postoperatorio</option></InputSelect><ValidationMessage For="() => _nuevaCita.TipoCita" /></label>
+                    <label class="patient-booking-full">Observaciones<textarea @bind="_nuevaCita.Observaciones" rows="3" maxlength="1000"></textarea></label>
+                </div>
+                <button class="btn btn-primary mt-3" type="submit" disabled="@_saving">@(_saving ? "Enviando..." : "Solicitar cita")</button>
+            </EditForm>
+            @if (_message is not null) { <p class="mt-3 mb-0" role="status">@_message</p> }
+        </section>
+
+        <section class="patient-recipes-section">
+            <h2>Recetas e indicaciones médicas</h2>
+            @if (_recetas.Count == 0)
+            {
+                <div class="card p-4"><p class="mb-0">Todavía no tienes recetas o indicaciones registradas.</p></div>
+            }
+            else
+            {
+                @foreach (var receta in _recetas)
+                {
+                    <article class="card p-4 mb-3 patient-recipe-card">
+                        <header><h3>Receta del @receta.Fecha.ToString("dd/MM/yyyy")</h3></header>
+                        @if (!string.IsNullOrWhiteSpace(receta.Indicaciones)) { <p class="patient-recipe-instructions">@receta.Indicaciones</p> }
+                        @if (receta.Medicamentos.Count > 0)
+                        {
+                            <div class="table-responsive"><table class="table"><thead><tr><th>Medicamento</th><th>Dosis</th><th>Frecuencia</th><th>Duración</th><th>Instrucciones</th></tr></thead><tbody>
+                                @foreach (var medicamento in receta.Medicamentos)
+                                {
+                                    <tr><td>@medicamento.Medicamento</td><td>@(medicamento.Dosis ?? "—")</td><td>@(medicamento.Frecuencia ?? "—")</td><td>@(medicamento.Duracion ?? "—")</td><td>@(medicamento.Instrucciones ?? "—")</td></tr>
+                                }
+                            </tbody></table></div>
+                        }
+                        else { <p class="mb-0">Esta receta no tiene medicamentos detallados.</p> }
+                    </article>
+                }
+            }
+        </section>
+    }
+</div>
 
 @code {
     private bool _loading = true;
+    private bool _saving;
     private ProfileDto? _perfil;
     private List<AppointmentDto> _citas = new();
     private List<InsuranceDto> _polizas = new();
+    private List<RecipeDto> _recetas = new();
     private string? _message;
-    private NewAppointment _nuevaCita = new() { Fecha = DateTime.Today.AddDays(1) };
+    private string? _error;
+    private string FechaMinima => DateTime.Now.AddMinutes(15).ToString("yyyy-MM-ddTHH:mm");
+    private NewAppointment _nuevaCita = new() { Fecha = DateTime.Now.AddDays(1).Date.AddHours(9), TipoCita = "" };
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
             _perfil = await Http.GetFromJsonAsync<ProfileDto>("api/PortalPaciente/perfil");
-            _citas = await Http.GetFromJsonAsync<List<AppointmentDto>>("api/PortalPaciente/citas") ?? new();
-            _polizas = await Http.GetFromJsonAsync<List<InsuranceDto>>("api/PortalPaciente/seguro") ?? new();
+            if (_perfil?.Vinculado == true)
+            {
+                var citasTask = Http.GetFromJsonAsync<List<AppointmentDto>>("api/PortalPaciente/citas");
+                var segurosTask = Http.GetFromJsonAsync<List<InsuranceDto>>("api/PortalPaciente/seguro");
+                var recetasTask = Http.GetFromJsonAsync<List<RecipeDto>>("api/PortalPaciente/recetas");
+                await Task.WhenAll(citasTask, segurosTask, recetasTask);
+                _citas = await citasTask ?? new();
+                _polizas = await segurosTask ?? new();
+                _recetas = await recetasTask ?? new();
+            }
         }
-        catch (HttpRequestException) { _message = "No se pudo conectar con el servidor."; }
+        catch (HttpRequestException) { _error = "No se pudo cargar el portal. Intenta de nuevo más tarde."; }
+        catch (System.Text.Json.JsonException) { _error = "El servidor devolvió datos con un formato inesperado."; }
         finally { _loading = false; }
     }
 
     private async Task AgendarAsync()
     {
-        var response = await Http.PostAsJsonAsync("api/PortalPaciente/citas", _nuevaCita);
-        _message = response.IsSuccessStatusCode ? "Solicitud de cita enviada." : "No se pudo enviar la solicitud.";
-        if (response.IsSuccessStatusCode)
+        _message = null;
+        if (_nuevaCita.Fecha <= DateTime.Now)
+        {
+            _message = "Selecciona una fecha y hora futuras.";
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            using var response = await Http.PostAsJsonAsync("api/PortalPaciente/citas", _nuevaCita);
+            if (!response.IsSuccessStatusCode)
+            {
+                _message = await response.Content.ReadAsStringAsync();
+                return;
+            }
+
+            _message = "Solicitud de cita enviada. La cita aparece como pendiente de confirmación.";
             _citas = await Http.GetFromJsonAsync<List<AppointmentDto>>("api/PortalPaciente/citas") ?? new();
+            _nuevaCita = new NewAppointment { Fecha = DateTime.Now.AddDays(1).Date.AddHours(9), TipoCita = "" };
+        }
+        catch (HttpRequestException) { _message = "No se pudo enviar la solicitud de cita."; }
+        finally { _saving = false; }
     }
 
-    private sealed class ProfileDto { public string Nombre { get; set; } = ""; public string Apellido { get; set; } = ""; public string? Cedula { get; set; } public string? Telefono { get; set; } public bool TieneSeguro { get; set; } }
-    private sealed class AppointmentDto { public DateTime Fecha { get; set; } public string? TipoCita { get; set; } public string Estado { get; set; } = ""; }
+    private sealed class ProfileDto { public bool Vinculado { get; set; } public int? PacienteId { get; set; } public string? Nombre { get; set; } public string? Apellido { get; set; } public string? Cedula { get; set; } public string? Telefono { get; set; } public string? Email { get; set; } public bool TieneSeguro { get; set; } }
+    private sealed class AppointmentDto { public int CitaId { get; set; } public DateTime Fecha { get; set; } public string? TipoCita { get; set; } public string Estado { get; set; } = ""; }
     private sealed class InsuranceDto { public string Seguro { get; set; } = ""; public string? NumeroPoliza { get; set; } public DateOnly? FechaVencimiento { get; set; } }
-    private sealed class NewAppointment { [System.ComponentModel.DataAnnotations.Required] public DateTime Fecha { get; set; } public string? TipoCita { get; set; } public string? Observaciones { get; set; } }
+    private sealed class RecipeDto { public int RecetaId { get; set; } public DateTime Fecha { get; set; } public string? Indicaciones { get; set; } public List<MedicineDto> Medicamentos { get; set; } = new(); }
+    private sealed class MedicineDto { public string Medicamento { get; set; } = ""; public string? Dosis { get; set; } public string? Frecuencia { get; set; } public string? Duracion { get; set; } public string? Instrucciones { get; set; } }
+    private sealed class NewAppointment { [System.ComponentModel.DataAnnotations.Required] public DateTime Fecha { get; set; } [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Selecciona el tipo de cita.")] public string TipoCita { get; set; } = ""; public string? Observaciones { get; set; } }
 }

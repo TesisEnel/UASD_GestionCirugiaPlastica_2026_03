@@ -20,5 +20,6 @@ builder.Services.AddScoped(sp =>
     return new HttpClient(handler) { BaseAddress = new Uri("https://localhost:7214/") };
 });
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<UserProfileState>();
 
 await builder.Build().RunAsync();

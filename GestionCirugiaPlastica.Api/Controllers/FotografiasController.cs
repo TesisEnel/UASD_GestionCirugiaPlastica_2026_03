@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace GestionCirugiaPlastica.API.Controllers;
 
 [ApiController]
-[Authorize(Roles = "Doctor")]
+[Authorize(Roles = "Doctora,AsistenteClinico")]
 [Route("api/[controller]")]
 public class FotografiasController(
     FotografiasService fotografiasService,

@@ -33,6 +33,9 @@ public class UsuariosServices(
     private static readonly Error RolNoExiste =
         new("Usuario.RolNoExiste", "El rol indicado no existe.");
 
+    private static readonly Error RolNoPermitido =
+        new("Usuario.RolNoPermitido", "Solo se permiten los roles Doctora, AsistenteClinico, Secretaria y Paciente.");
+
     private static readonly Error PasswordInvalida =
         new("Usuario.PasswordInvalida", "La contraseña debe tener al menos 12 caracteres.");
 
@@ -47,6 +50,9 @@ public class UsuariosServices(
 
     private static readonly Error UltimoAdministrador =
         new("Usuario.UltimoAdministrador", "No se puede quitar o desactivar al último administrador activo.");
+
+    private static readonly Error UltimaDoctora =
+        new("Usuario.UltimaDoctora", "No se puede cambiar o desactivar a la última Doctora activa.");
 
     private static readonly Error CredencialesInvalidas =
         new("Usuario.CredencialesInvalidas", "La contraseña actual no es correcta o el usuario está inactivo.");
@@ -68,6 +74,9 @@ public class UsuariosServices(
 
     private static bool EsAdministrador(string nombreRol) =>
         nombreRol.Equals(RolAdministrador, StringComparison.OrdinalIgnoreCase);
+
+    private static bool EsDoctora(string nombreRol) =>
+        nombreRol.Equals("Doctora", StringComparison.OrdinalIgnoreCase);
 
     private static bool EmailValido(string email) =>
         MailAddress.TryCreate(email, out var direccion) && direccion.Address == email;
@@ -196,6 +205,7 @@ public class UsuariosServices(
                 Nombre = u.Nombre,
                 Apellido = u.Apellido,
                 Email = u.Email,
+                NombreUsuario = u.NombreUsuario,
                 RolId = u.RolId,
                 Rol = u.Rol,
                 Activo = u.Activo,
@@ -224,6 +234,7 @@ public class UsuariosServices(
                 Nombre = u.Nombre,
                 Apellido = u.Apellido,
                 Email = u.Email,
+                NombreUsuario = u.NombreUsuario,
                 RolId = u.RolId,
                 Rol = u.Rol,
                 Activo = u.Activo,
@@ -379,6 +390,10 @@ public class UsuariosServices(
         if (nuevoRol == null)
             return Result.Failure(RolNoExiste);
 
+        if (!new[] { "Doctora", "AsistenteClinico", "Secretaria", "Paciente" }
+                .Contains(nuevoRol.Nombre, StringComparer.OrdinalIgnoreCase))
+            return Result.Failure(RolNoPermitido);
+
         if (usuario.RolId == nuevoRolId)
             return Result.Failure(MismoRol);
 
@@ -395,6 +410,16 @@ public class UsuariosServices(
 
             if (!otroAdministrador)
                 return Result.Failure(UltimoAdministrador);
+        }
+
+        if (usuario.Activo && EsDoctora(usuario.Rol.Nombre) && !EsDoctora(nuevoRol.Nombre))
+        {
+            bool otraDoctoraActiva = await contexto.Usuarios.AnyAsync(u =>
+                u.UsuarioId != usuarioId && u.Activo &&
+                u.Rol.Nombre.ToLower() == "doctora");
+
+            if (!otraDoctoraActiva)
+                return Result.Failure(UltimaDoctora);
         }
 
         usuario.RolId = nuevoRolId;
@@ -470,6 +495,16 @@ public class UsuariosServices(
 
             if (!otroAdministrador)
                 return Result.Failure(UltimoAdministrador);
+        }
+
+        if (EsDoctora(usuario.Rol.Nombre))
+        {
+            bool otraDoctoraActiva = await contexto.Usuarios.AnyAsync(u =>
+                u.UsuarioId != usuarioId && u.Activo &&
+                u.Rol.Nombre.ToLower() == "doctora");
+
+            if (!otraDoctoraActiva)
+                return Result.Failure(UltimaDoctora);
         }
 
         usuario.Activo = false;

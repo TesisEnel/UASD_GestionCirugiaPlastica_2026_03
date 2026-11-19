@@ -1,31 +1,46 @@
 ﻿
 @using System.Net.Http.Json
 @using System.Globalization
+@implements IDisposable
 @inject HttpClient Http
 @inject AuthService Auth
 @inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject UserProfileState ProfileState
 
 <div class="right-panel-content">
 
     <!-- PERFIL DEL CONSULTORIO -->
     <AuthorizeView>
         <Authorized Context="session">
-            <div class="right-profile" role="button" tabindex="0" @onclick="AlternarMenuPerfil" @onkeydown="PerfilKeyDown">
-                <div class="profile-avatar"><i class="fa-solid fa-user-doctor"></i></div>
-                <div class="profile-info">
-                    <strong>@session.User.Identity?.Name</strong>
-                    <span>@session.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value</span>
+            <div class="profile-session">
+                <div class="right-profile" role="button" tabindex="0" @onclick="AlternarMenuPerfil" @onkeydown="PerfilKeyDown">
+                    <div class="profile-avatar">
+                        @if (!string.IsNullOrWhiteSpace(_profile?.FotoUrl))
+                        {
+                            <img src="@FotoSource(_profile.FotoUrl)" alt="Foto de perfil" />
+                        }
+                        else
+                        {
+                            <i class="fa-solid fa-user-doctor"></i>
+                        }
+                    </div>
+                    <div class="profile-info">
+                        <strong>@(_profile?.NombreCompleto ?? session.User.Identity?.Name)</strong>
+                        <span>@(_profile?.Rol ?? session.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value)</span>
+                    </div>
+                    <button class="profile-options" type="button" title="Opciones de sesión" @onclick:stopPropagation="true" @onclick="AlternarMenuPerfil">
+                        <i class="fa-solid fa-ellipsis"></i>
+                    </button>
                 </div>
-                <button class="profile-options" type="button" title="Opciones de sesión" @onclick:stopPropagation="true" @onclick="AlternarMenuPerfil">
-                    <i class="fa-solid fa-ellipsis"></i>
-                </button>
+                @if (_menuPerfilAbierto)
+                {
+                    <div class="profile-dropdown">
+                        <a href="/perfil" @onclick:stopPropagation="true"><i class="fa-solid fa-user-pen"></i> Mi perfil</a>
+                        <button type="button" @onclick="CerrarSesionAsync"><i class="fa-solid fa-arrow-right-from-bracket"></i> Cerrar sesión</button>
+                    </div>
+                }
             </div>
-            @if (_menuPerfilAbierto)
-            {
-                <div class="profile-dropdown">
-                    <button type="button" @onclick="CerrarSesionAsync"><i class="fa-solid fa-arrow-right-from-bracket"></i> Cerrar sesión</button>
-                </div>
-            }
         </Authorized>
         <NotAuthorized>
             <button type="button" class="right-profile profile-card-button" @onclick="IrALogin">
@@ -35,6 +50,8 @@
         </NotAuthorized>
     </AuthorizeView>
 
+    <AuthorizeView Roles="Doctora,Secretaria">
+        <Authorized>
     <!-- CALENDARIO -->
     <section class="calendar-section">
 
@@ -66,8 +83,11 @@
             {
                 <button type="button"
                         class="calendar-day @(day.IsCurrentMonth ? "" : "other-month") @(day.Date.Date == SelectedDate.Date ? "selected" : "")"
+                        aria-label="@CalendarDayLabel(day.Date)"
+                        aria-pressed="@(day.Date.Date == SelectedDate.Date)"
                         @onclick="() => SelectDate(day.Date)">
-                    @day.Date.Day
+                    <span class="calendar-day-number">@day.Date.Day</span>
+                    <span class="calendar-appointment-dot @(HasScheduledAppointments(day.Date) ? "visible" : "hidden")" aria-hidden="true"></span>
                 </button>
             }
 
@@ -128,12 +148,15 @@
         </div>
 
     </section>
+        </Authorized>
+    </AuthorizeView>
 
 </div>
 
 @code {
 
     private bool _menuPerfilAbierto;
+    private UserProfileDto? _profile;
 
     private void IrALogin() => Navigation.NavigateTo("/login");
 
@@ -147,6 +170,7 @@
     private async Task CerrarSesionAsync()
     {
         await Auth.LogoutAsync();
+        ProfileState.Set(null);
         _menuPerfilAbierto = false;
         Navigation.NavigateTo("/login", forceLoad: true);
     }
@@ -181,11 +205,66 @@
             .OrderBy(a => a.Date)
             .ToList();
 
+    private bool HasScheduledAppointments(DateTime date) => Appointments.Any(a =>
+        a.Date.Date == date.Date &&
+        !string.Equals(a.Status?.Trim(), "Cancelada", StringComparison.OrdinalIgnoreCase));
+
+    private string CalendarDayLabel(DateTime date)
+    {
+        var appointmentCount = Appointments.Count(a =>
+            a.Date.Date == date.Date &&
+            !string.Equals(a.Status?.Trim(), "Cancelada", StringComparison.OrdinalIgnoreCase));
+
+        return appointmentCount == 0
+            ? date.ToString("d 'de' MMMM", SpanishCulture)
+            : $"{date.ToString("d 'de' MMMM", SpanishCulture)}, {appointmentCount} cita(s)";
+    }
+
     protected override async Task OnInitializedAsync()
     {
-        GenerateCalendar();
-        await LoadAppointments();
+        ProfileState.Changed += ProfileStateChanged;
+        _profile = ProfileState.Current;
+
+        var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        if (authenticationState.User.Identity?.IsAuthenticated != true)
+            return;
+
+        await LoadProfileAsync();
+        if (authenticationState.User.IsInRole("Doctora") || authenticationState.User.IsInRole("Secretaria"))
+        {
+            GenerateCalendar();
+            await LoadAppointments();
+        }
     }
+
+    private async Task LoadProfileAsync()
+    {
+        try
+        {
+            _profile = await Http.GetFromJsonAsync<UserProfileDto>("api/Perfil");
+            if (_profile is not null)
+                ProfileState.Set(_profile);
+        }
+        catch (HttpRequestException)
+        {
+            // El contenido del perfil no debe impedir que se use la agenda.
+        }
+    }
+
+    private void ProfileStateChanged() => _ = InvokeAsync(() =>
+    {
+        _profile = ProfileState.Current;
+        StateHasChanged();
+    });
+
+    private string FotoSource(string fotoUrl)
+    {
+        if (Uri.TryCreate(fotoUrl, UriKind.Absolute, out var absolute))
+            return absolute.ToString();
+        return new Uri(Http.BaseAddress!, fotoUrl).ToString();
+    }
+
+    public void Dispose() => ProfileState.Changed -= ProfileStateChanged;
 
     // Cargar citas desde la API
     private async Task LoadAppointments()

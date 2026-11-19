@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace GestionCirugiaPlastica.API.Controllers;
 
 [ApiController]
-[Authorize(Roles = "Doctor")]
+[Authorize(Roles = "Doctora,AsistenteClinico")]
 [Route("api/[controller]")]
 public class CirugiasController : ControllerBase
 {
@@ -26,7 +26,7 @@ public class CirugiasController : ControllerBase
         if (resultado.IsFailure)
             return BadRequest(resultado);
 
-        return Ok(resultado);
+        return Ok(new { Value = resultado.Value?.Select(ResumenClinico) ?? Enumerable.Empty<object>() });
     }
 
     // GET: api/Cirugias/1
@@ -41,8 +41,30 @@ public class CirugiasController : ControllerBase
         if (resultado.Value is null)
             return NotFound();
 
-        return Ok(resultado);
+        return Ok(new { Value = resultado.Value is null ? null : ResumenClinico(resultado.Value) });
     }
+
+    private static object ResumenClinico(Cirugia cirugia) => new
+    {
+        cirugia.CirugiaId,
+        cirugia.FechaCirugia,
+        cirugia.PacienteId,
+        cirugia.ProcedimientoId,
+        cirugia.DiagnosticoPreoperatorio,
+        cirugia.Observaciones,
+        cirugia.Estado,
+        Paciente = cirugia.Paciente is null ? null : new
+        {
+            cirugia.Paciente.PacienteId,
+            cirugia.Paciente.Nombre,
+            cirugia.Paciente.Apellido
+        },
+        Procedimiento = cirugia.Procedimiento is null ? null : new
+        {
+            cirugia.Procedimiento.ProcedimientoId,
+            cirugia.Procedimiento.Nombre
+        }
+    };
 
     // POST: api/Cirugias
     [HttpPost]

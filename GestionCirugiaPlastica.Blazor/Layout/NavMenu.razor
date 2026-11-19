@@ -15,7 +15,7 @@
     <!-- MENÚ PRINCIPAL -->
     <div class="menu-label">MENÚ PRINCIPAL</div>
 
-    <AuthorizeView Roles="Doctor,Secretaria" Context="staffSession">
+    <AuthorizeView Roles="Doctora,Secretaria" Context="staffSession">
     <nav class="nav-menu">
 
         <NavLink href="/"
@@ -30,17 +30,6 @@
             <span>Citas</span>
         </NavLink>
 
-        <NavLink href="/mensajes" class="nav-item">
-            <i class="fa-regular fa-message"></i>
-            <span>Mensajes</span>
-            <span class="menu-badge">12</span>
-        </NavLink>
-
-        <NavLink href="/calendario" class="nav-item">
-            <i class="fa-regular fa-calendar"></i>
-            <span>Calendario</span>
-        </NavLink>
-
         <NavLink href="/pacientes" class="nav-item">
             <i class="fa-solid fa-user-group"></i>
             <span>Pacientes</span>
@@ -51,7 +40,7 @@
             <span>Pagos</span>
         </NavLink>
 
-        <AuthorizeView Roles="Doctor" Context="doctorSession">
+        <AuthorizeView Roles="Doctora" Context="doctorSession">
             <NavLink href="/cirugias" class="nav-item">
                 <i class="fa-solid fa-user-doctor"></i>
                 <span>Cirugías</span>
@@ -60,31 +49,45 @@
                 <i class="fa-solid fa-prescription-bottle-medical"></i>
                 <span>Recetas</span>
             </NavLink>
+            <NavLink href="/aseguradoras" class="nav-item">
+                <i class="fa-solid fa-shield-heart"></i>
+                <span>Aseguradoras</span>
+            </NavLink>
+            <NavLink href="/configuracion" class="nav-item">
+                <i class="fa-solid fa-gear"></i>
+                <span>Configuración</span>
+            </NavLink>
         </AuthorizeView>
-
-        <NavLink href="/noticias" class="nav-item">
-            <i class="fa-regular fa-newspaper"></i>
-            <span>Noticias</span>
-        </NavLink>
-
-        <NavLink href="/ayuda" class="nav-item">
-            <i class="fa-regular fa-circle-question"></i>
-            <span>Ayuda</span>
-        </NavLink>
-
-        <NavLink href="/configuracion" class="nav-item">
-            <i class="fa-solid fa-gear"></i>
-            <span>Configuración</span>
-        </NavLink>
 
     </nav>
     </AuthorizeView>
 
+    <AuthorizeView Roles="AsistenteClinico">
+        <nav class="nav-menu">
+            <NavLink href="/expedientes" class="nav-item">
+                <i class="fa-solid fa-file-medical"></i>
+                <span>Expedientes</span>
+            </NavLink>
+            <NavLink href="/cirugias" class="nav-item">
+                <i class="fa-solid fa-user-doctor"></i>
+                <span>Cirugías</span>
+            </NavLink>
+            <NavLink href="/recetas" class="nav-item">
+                <i class="fa-solid fa-prescription-bottle-medical"></i>
+                <span>Recetas</span>
+            </NavLink>
+        </nav>
+    </AuthorizeView>
+
     <AuthorizeView Roles="Paciente">
         <nav class="nav-menu">
+            <NavLink href="/inicio-paciente" class="nav-item">
+                <i class="fa-solid fa-house-user"></i>
+                <span>Inicio</span>
+            </NavLink>
             <NavLink href="/mi-portal" class="nav-item">
                 <i class="fa-solid fa-user"></i>
-                <span>Mi perfil y citas</span>
+                <span>Mi perfil, citas y recetas</span>
             </NavLink>
         </nav>
     </AuthorizeView>

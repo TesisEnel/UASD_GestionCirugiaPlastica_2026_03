@@ -1,5 +1,5 @@
 @page "/recetas"
-@attribute [Authorize(Roles = "Doctor")]
+@attribute [Authorize(Roles = "Doctora,AsistenteClinico")]
 @inject HttpClient Http
 
 <PageTitle>Recetas | Tanger Clinic</PageTitle>
@@ -70,7 +70,7 @@
     {
         try
         {
-            var pTask = Http.GetFromJsonAsync<Envelope<List<PacienteDto>>>("api/Pacientes");
+            var pTask = Http.GetFromJsonAsync<Envelope<List<PacienteDto>>>("api/Pacientes/expediente/selector");
             var rTask = Http.GetFromJsonAsync<Envelope<List<RecetaDto>>>("api/Recetas");
             await Task.WhenAll(pTask, rTask);
             _pacientes = (await pTask)?.Value ?? new();

@@ -25,8 +25,10 @@ IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Usuarios_Pacient
         FOREIGN KEY (PacienteId) REFERENCES dbo.Pacientes(PacienteId);
 GO
 
-IF NOT EXISTS (SELECT 1 FROM dbo.Roles WHERE Nombre = N'Doctor')
-    INSERT dbo.Roles (Nombre, Descripcion) VALUES (N'Doctor', N'Acceso clínico completo');
+IF NOT EXISTS (SELECT 1 FROM dbo.Roles WHERE Nombre = N'Doctora')
+    INSERT dbo.Roles (Nombre, Descripcion) VALUES (N'Doctora', N'Jefa / Dueña; acceso total al sistema');
+IF NOT EXISTS (SELECT 1 FROM dbo.Roles WHERE Nombre = N'AsistenteClinico')
+    INSERT dbo.Roles (Nombre, Descripcion) VALUES (N'AsistenteClinico', N'Acceso clínico a expedientes, cirugías y recetas');
 IF NOT EXISTS (SELECT 1 FROM dbo.Roles WHERE Nombre = N'Secretaria')
     INSERT dbo.Roles (Nombre, Descripcion) VALUES (N'Secretaria', N'Recepción, agenda, pacientes y cobros');
 IF NOT EXISTS (SELECT 1 FROM dbo.Roles WHERE Nombre = N'Paciente')
@@ -35,15 +37,21 @@ GO
 
 IF NOT EXISTS (SELECT 1 FROM dbo.Usuarios WHERE NombreUsuario = N'doctor.demo')
     INSERT dbo.Usuarios (FechaRegistro, Nombre, Apellido, Email, NombreUsuario, PasswordHash, RolId, Activo)
-    SELECT GETDATE(), N'Doctor', N'Demo', NULL, N'doctor.demo',
+    SELECT GETDATE(), N'Doctora', N'Demo', NULL, N'doctor.demo',
         N'AQAAAAEAAYagAAAAEH8ryt/hvDWmOG0PLEJVOMYc0jKeTEjS8wT2wKxQJauNnl6wUdwIW6z7DI1XgBgdJQ==', RolId, 1
-    FROM dbo.Roles WHERE Nombre = N'Doctor';
+    FROM dbo.Roles WHERE Nombre = N'Doctora';
 
 IF NOT EXISTS (SELECT 1 FROM dbo.Usuarios WHERE NombreUsuario = N'secretaria.demo')
     INSERT dbo.Usuarios (FechaRegistro, Nombre, Apellido, Email, NombreUsuario, PasswordHash, RolId, Activo)
     SELECT GETDATE(), N'Secretaria', N'Demo', NULL, N'secretaria.demo',
         N'AQAAAAEAAYagAAAAEM3WNoKBln0sPpISOznteHitMxa4HPKGzMbuX8Ru/dtjRJSlANjMCm+iUgOnH0iJAw==', RolId, 1
     FROM dbo.Roles WHERE Nombre = N'Secretaria';
+
+IF NOT EXISTS (SELECT 1 FROM dbo.Usuarios WHERE NombreUsuario = N'asistente.demo')
+    INSERT dbo.Usuarios (FechaRegistro, Nombre, Apellido, Email, NombreUsuario, PasswordHash, RolId, Activo)
+    SELECT GETDATE(), N'Asistente', N'Demo', NULL, N'asistente.demo',
+        N'RESET_BY_API_PASSWORD_SEEDER', RolId, 1
+    FROM dbo.Roles WHERE Nombre = N'AsistenteClinico';
 
 IF NOT EXISTS (SELECT 1 FROM dbo.Pacientes WHERE Cedula = N'00000000001')
     INSERT dbo.Pacientes (FechaRegistro, Nombre, Apellido, Cedula, Telefono, Email)
@@ -57,8 +65,19 @@ IF NOT EXISTS (SELECT 1 FROM dbo.Usuarios WHERE NombreUsuario = N'paciente.demo'
     WHERE p.Cedula = N'00000000001' AND r.Nombre = N'Paciente';
 GO
 
+-- Repara la cuenta demo si ya existía sin vinculación cuando se ejecutó la semilla.
+UPDATE u
+SET u.PacienteId = p.PacienteId
+FROM dbo.Usuarios u
+CROSS JOIN dbo.Pacientes p
+WHERE u.NombreUsuario = N'paciente.demo'
+  AND u.PacienteId IS NULL
+  AND p.Cedula = N'00000000001';
+GO
+
 /* Acceso de prueba (se puede ingresar con username o username/cédula/teléfono para Paciente):
-   doctor.demo     / DoctorTest!2026
+   doctor.demo     / DoctorTest!2026 (rol Doctora)
+   asistente.demo  / AsistenteTest!2026
    secretaria.demo / SecretariaTest!2026
    paciente.demo   / PacienteTest!2026
    paciente.demo también puede ingresar con cédula 00000000001 o teléfono 8090000001.

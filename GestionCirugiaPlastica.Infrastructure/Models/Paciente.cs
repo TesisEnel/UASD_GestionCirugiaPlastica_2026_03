@@ -2,11 +2,9 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using Microsoft.EntityFrameworkCore;
 
 namespace GestionCirugiaPlastica.Infrastructure.Models;
 
-[Index("Cedula", Name = "UQ__Paciente__B4ADFE385F036FD8", IsUnique = true)]
 public partial class Paciente
 {
     [Key]
@@ -53,6 +51,9 @@ public partial class Paciente
 
     [InverseProperty("Paciente")]
     public virtual ICollection<PacienteSeguro> PacienteSeguros { get; set; } = new List<PacienteSeguro>();
+
+    [InverseProperty("Paciente")]
+    public virtual ICollection<Pago> Pago { get; set; } = new List<Pago>();
 
     [InverseProperty("Paciente")]
     public virtual ICollection<Receta> Receta { get; set; } = new List<Receta>();

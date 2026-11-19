@@ -1,12 +1,13 @@
 using GestionCirugiaPlastica.Application.Services;
 using GestionCirugiaPlastica.Infrastructure.Models;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 
 namespace GestionCirugiaPlastica.Api.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-[Authorize(Roles = "Doctor")]
+[Authorize(Roles = "Doctora")]
 public class UsuariosController(UsuariosServices usuariosService) : ControllerBase
 {
     // Registrar o actualizar usuario
@@ -77,6 +78,9 @@ public class UsuariosController(UsuariosServices usuariosService) : ControllerBa
     [HttpPatch("{usuarioId:int}/rol")]
     public async Task<IActionResult> CambiarRol(int usuarioId, [FromQuery] int nuevoRolId)
     {
+        if (int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var actorId) && actorId == usuarioId)
+            return BadRequest(new { message = "No puedes cambiar tu propio rol desde esta pantalla." });
+
         var resultado = await usuariosService.CambiarRol(usuarioId, nuevoRolId);
         return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
@@ -99,6 +103,9 @@ public class UsuariosController(UsuariosServices usuariosService) : ControllerBa
     [HttpPatch("{usuarioId:int}/desactivar")]
     public async Task<IActionResult> Desactivar(int usuarioId)
     {
+        if (int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var actorId) && actorId == usuarioId)
+            return BadRequest(new { message = "No puedes desactivar tu propia cuenta." });
+
         var resultado = await usuariosService.Desactivar(usuarioId);
         return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }

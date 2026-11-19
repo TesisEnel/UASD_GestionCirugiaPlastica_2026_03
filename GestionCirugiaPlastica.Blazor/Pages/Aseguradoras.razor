@@ -1,0 +1,170 @@
+@page "/aseguradoras"
+@attribute [Authorize(Roles = "Doctora")]
+@using System.Net.Http.Json
+@inject HttpClient Http
+
+<PageTitle>Aseguradoras autorizadas | Tanger Clinic</PageTitle>
+<div class="med-page">
+    <header class="med-page-header">
+        <div><h1>Aseguradoras autorizadas</h1><p>Administra las entidades médicas habilitadas para pacientes y cobros.</p></div>
+        <button class="med-primary" @onclick="Nuevo">Agregar aseguradora</button>
+    </header>
+
+    @if (_error is not null) { <div class="med-error" role="alert">@_error</div> }
+    @if (_success is not null) { <div class="payment-success" role="status">@_success</div> }
+
+    @if (_form is not null)
+    {
+        <section class="med-card">
+            <h2>@(_form.SeguroId == 0 ? "Nueva aseguradora" : "Editar aseguradora")</h2>
+            <EditForm Model="_form" OnValidSubmit="GuardarAsync">
+                <DataAnnotationsValidator />
+                <div class="med-grid">
+                    <label>Nombre *<InputText @bind-Value="_form.Nombre" /></label>
+                    <label>Teléfono<InputText @bind-Value="_form.Telefono" /></label>
+                    <label>Correo<InputText @bind-Value="_form.Email" /></label>
+                    <label>Dirección<InputText @bind-Value="_form.Direccion" /></label>
+                </div>
+                @if (_formError is not null) { <p class="med-error">@_formError</p> }
+                <button class="med-primary" type="submit" disabled="@_guardando">@(_guardando ? "Guardando..." : "Guardar")</button>
+                <button class="med-secondary" type="button" @onclick="Cancelar">Cancelar</button>
+            </EditForm>
+        </section>
+    }
+
+    <section class="med-card">
+        @if (_cargando)
+        {
+            <p>Cargando aseguradoras...</p>
+        }
+        else if (_seguros.Count == 0)
+        {
+            <p>No hay aseguradoras registradas.</p>
+        }
+        else
+        {
+            <div class="med-table-scroll"><table class="med-table">
+                <thead><tr><th>Aseguradora</th><th>Contacto</th><th>Dirección</th><th>Estado</th><th>Acciones</th></tr></thead>
+                <tbody>
+                @foreach (var seguro in _seguros)
+                {
+                    <tr>
+                        <td><strong>@seguro.Nombre</strong></td>
+                        <td>@(seguro.Telefono ?? "—")<br />@(seguro.Email ?? "—")</td>
+                        <td>@(seguro.Direccion ?? "—")</td>
+                        <td><span class="payment-status @(seguro.Activo ? "paid" : "pending")">@(seguro.Activo ? "Activa" : "Inactiva")</span></td>
+                        <td class="insurance-actions">
+                            <button class="med-secondary" @onclick="() => Editar(seguro)">Editar</button>
+                            <button class="@(seguro.Activo ? "med-secondary" : "med-primary")" @onclick="() => CambiarEstadoAsync(seguro)">
+                                @(seguro.Activo ? "Desactivar" : "Autorizar")
+                            </button>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table></div>
+            <p class="insurance-note">Las aseguradoras inactivas se conservan en el historial y dejan de estar disponibles para nuevas selecciones de pacientes y cobros.</p>
+        }
+    </section>
+</div>
+
+@code {
+    private List<SeguroDto> _seguros = new();
+    private SeguroForm? _form;
+    private bool _cargando = true;
+    private bool _guardando;
+    private string? _error, _success, _formError;
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        _cargando = true;
+        try
+        {
+            var result = await Http.GetFromJsonAsync<Envelope<List<SeguroDto>>>("api/Seguros");
+            _seguros = result?.Value ?? new();
+        }
+        catch (HttpRequestException) { _error = "No se pudieron cargar las aseguradoras."; }
+        catch (System.Text.Json.JsonException) { _error = "La respuesta del servidor no tiene el formato esperado."; }
+        finally { _cargando = false; }
+    }
+
+    private void Nuevo()
+    {
+        _formError = null;
+        _form = new SeguroForm();
+    }
+
+    private void Editar(SeguroDto seguro)
+    {
+        _formError = null;
+        _form = new SeguroForm
+        {
+            SeguroId = seguro.SeguroId,
+            FechaRegistro = seguro.FechaRegistro,
+            Nombre = seguro.Nombre,
+            Telefono = seguro.Telefono,
+            Email = seguro.Email,
+            Direccion = seguro.Direccion
+        };
+    }
+
+    private void Cancelar() { _form = null; _formError = null; }
+
+    private async Task GuardarAsync()
+    {
+        if (_form is null) return;
+        if (string.IsNullOrWhiteSpace(_form.Nombre)) { _formError = "El nombre es obligatorio."; return; }
+        _guardando = true;
+        _formError = null;
+        try
+        {
+            var payload = new
+            {
+                _form.SeguroId,
+                FechaRegistro = _form.FechaRegistro == default ? DateTime.Now : _form.FechaRegistro,
+                Nombre = _form.Nombre.Trim(),
+                _form.Telefono,
+                _form.Email,
+                _form.Direccion,
+                Activo = true
+            };
+            using var response = _form.SeguroId == 0
+                ? await Http.PostAsJsonAsync("api/Seguros", payload)
+                : await Http.PutAsJsonAsync($"api/Seguros/{_form.SeguroId}", payload);
+            if (!response.IsSuccessStatusCode)
+            {
+                _formError = "No se pudo guardar la aseguradora. " + await response.Content.ReadAsStringAsync();
+                return;
+            }
+
+            _form = null;
+            _success = "Aseguradora guardada correctamente.";
+            _error = null;
+            await CargarAsync();
+        }
+        catch (HttpRequestException) { _formError = "No se pudo conectar con la API."; }
+        finally { _guardando = false; }
+    }
+
+    private async Task CambiarEstadoAsync(SeguroDto seguro)
+    {
+        _error = null;
+        _success = null;
+        var accion = seguro.Activo ? "desactivar" : "activar";
+        using var response = await Http.PatchAsync($"api/Seguros/{seguro.SeguroId}/{accion}", null);
+        if (!response.IsSuccessStatusCode)
+        {
+            _error = "No se pudo cambiar el estado de la aseguradora. " + await response.Content.ReadAsStringAsync();
+            return;
+        }
+
+        _success = seguro.Activo ? "Aseguradora desactivada." : "Aseguradora autorizada.";
+        await CargarAsync();
+    }
+
+    private sealed class Envelope<T> { public T? Value { get; set; } }
+    private sealed class SeguroDto { public int SeguroId { get; set; } public DateTime FechaRegistro { get; set; } public string Nombre { get; set; } = ""; public string? Telefono { get; set; } public string? Email { get; set; } public string? Direccion { get; set; } public bool Activo { get; set; } }
+    private sealed class SeguroForm { public int SeguroId { get; set; } public DateTime FechaRegistro { get; set; } = DateTime.Now; public string Nombre { get; set; } = ""; public string? Telefono { get; set; } public string? Email { get; set; } public string? Direccion { get; set; } }
+}

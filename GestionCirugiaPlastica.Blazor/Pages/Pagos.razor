@@ -1,0 +1,318 @@
+@page "/pagos"
+@attribute [Authorize(Roles = "Doctora,Secretaria")]
+@using System.Net.Http.Json
+@inject HttpClient Http
+
+<PageTitle>Pagos | Tanger Clinic</PageTitle>
+<div class="med-page">
+    <header class="med-page-header">
+        <div><h1>Cobros y pagos</h1><p>Registra cobros y consulta su estado e historial.</p></div>
+    </header>
+
+    @if (_error is not null) { <div class="med-error" role="alert">@_error</div> }
+    @if (_success is not null) { <div class="payment-success" role="status">@_success</div> }
+
+    <section class="med-card payment-entry">
+        <h2>Registrar cobro</h2>
+        <div class="payment-form-grid">
+            <label>Paciente
+                <select value="@_pacienteId" @onchange="PacienteCambiadoAsync">
+                    <option value="0">Selecciona un paciente</option>
+                    @foreach (var paciente in _pacientes.OrderBy(p => p.Nombre).ThenBy(p => p.Apellido))
+                    {
+                        <option value="@paciente.PacienteId">@paciente.Nombre @paciente.Apellido</option>
+                    }
+                </select>
+            </label>
+            <label>Vincular cobro a
+                <select value="@_tipoVinculo" @onchange="VinculoCambiado">
+                    <option value="Paciente">Perfil del paciente</option>
+                    <option value="Cita">Cita</option>
+                    <option value="Cirugia">Cirugía</option>
+                </select>
+            </label>
+
+            @if (_tipoVinculo == "Cita")
+            {
+                <label>Cita
+                    <select value="@_citaId" @onchange="CitaCambiada">
+                        <option value="0">Selecciona una cita</option>
+                        @foreach (var cita in CitasDelPaciente)
+                        {
+                            <option value="@cita.CitaId">@cita.Fecha.ToString("dd/MM/yyyy HH:mm") · @cita.TipoCita · RD$ @cita.Costo.ToString("N2")</option>
+                        }
+                    </select>
+                </label>
+            }
+            else if (_tipoVinculo == "Cirugia")
+            {
+                <label>Cirugía
+                    <select value="@_cirugiaId" @onchange="CirugiaCambiada">
+                        <option value="0">Selecciona una cirugía</option>
+                        @foreach (var cirugia in CirugiasDelPaciente)
+                        {
+                            <option value="@cirugia.CirugiaId">@cirugia.FechaCirugia.ToString("dd/MM/yyyy") · @cirugia.Paciente</option>
+                        }
+                    </select>
+                </label>
+            }
+
+            @if (_pacienteSeleccionado is not null)
+            {
+                <div class="payment-insurance @(_pacienteSeleccionado.TieneSeguro ? "has-insurance" : "private-patient")">
+                    @if (_pacienteSeleccionado.TieneSeguro)
+                    {
+                        <strong>Paciente con seguro médico</strong>
+                        @if (_polizas.Count > 0)
+                        {
+                            <label>Aseguradora
+                                <select value="@(_seguroId?.ToString() ?? "")" @onchange="SeguroCambiado">
+                                    <option value="">Selecciona aseguradora</option>
+                                    @foreach (var poliza in _polizas)
+                                    {
+                                        <option value="@poliza.SeguroId">@poliza.Seguro?.Nombre</option>
+                                    }
+                                </select>
+                            </label>
+                        }
+                        else
+                        {
+                            <span>No hay aseguradora activa vinculada. Confirma manualmente el monto cubierto.</span>
+                        }
+                    }
+                    else
+                    {
+                        <strong>Paciente privado (sin seguro)</strong>
+                        <span>El paciente cubre el monto total.</span>
+                    }
+                </div>
+            }
+
+            <label>Monto total (RD$)
+                <InputNumber @bind-Value="_montoTotal" min="0.01" step="0.01" />
+            </label>
+            @if (_pacienteSeleccionado?.TieneSeguro == true)
+            {
+                <label>Monto cubierto por seguro (RD$)
+                    <InputNumber @bind-Value="_montoSeguro" min="0" step="0.01" />
+                </label>
+            }
+            else
+            {
+                <input type="hidden" value="0" />
+            }
+            <div class="payment-copay">
+                <span>Copago del paciente</span>
+                <strong>RD$ @MontoPaciente.ToString("N2")</strong>
+            </div>
+            <label>Estado del cobro
+                <select @bind="_estado">
+                    <option value="Pagado">Pagado</option>
+                    <option value="Pendiente">Pendiente</option>
+                </select>
+            </label>
+            <label>Método de pago
+                <select @bind="_metodoPago">
+                    <option value="Efectivo">Efectivo</option>
+                    <option value="Tarjeta">Tarjeta</option>
+                    <option value="Transferencia">Transferencia</option>
+                    <option value="Otro">Otro</option>
+                </select>
+            </label>
+            <label class="payment-full">Concepto / notas
+                <input @bind="_concepto" maxlength="250" placeholder="Consulta, procedimiento, copago..." />
+            </label>
+        </div>
+
+        @if (_montoTotal > 0 && _montoSeguro > _montoTotal) { <p class="med-error">El monto cubierto por el seguro no puede superar el monto total.</p> }
+        @if (_pacienteSeleccionado is null) { <p class="payment-hint">Selecciona un paciente para calcular la cobertura y el copago.</p> }
+        <button class="med-primary" @onclick="GuardarPagoAsync" disabled="@_guardando">
+            @(_guardando ? "Guardando..." : "Registrar cobro")
+        </button>
+    </section>
+
+    <section class="med-card">
+        <div class="payment-history-heading">
+            <div><h2>Historial de pagos</h2><p>Estado registrado de cada cobro.</p></div>
+            <input class="med-search" placeholder="Buscar por paciente o concepto" @bind="_buscar" @bind:event="oninput" />
+        </div>
+        @if (_cargando)
+        {
+            <p>Cargando historial...</p>
+        }
+        else if (!PagosVisibles.Any())
+        {
+            <p>No hay pagos que coincidan con la búsqueda.</p>
+        }
+        else
+        {
+            <div class="med-table-scroll">
+                <table class="med-table payment-table">
+                    <thead><tr><th>Fecha</th><th>Paciente</th><th>Asociado a</th><th>Total</th><th>Seguro</th><th>Copago</th><th>Estado</th></tr></thead>
+                    <tbody>
+                    @foreach (var pago in PagosVisibles)
+                    {
+                        <tr>
+                            <td>@pago.Fecha.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td>@pago.Paciente</td>
+                            <td>@Asociacion(pago)</td>
+                            <td>RD$ @pago.Monto.ToString("N2")</td>
+                            <td>@(pago.Aseguradora ?? "—")<br /><small>RD$ @pago.MontoSeguro.ToString("N2")</small></td>
+                            <td>RD$ @Copago(pago).ToString("N2")</td>
+                            <td><span class="payment-status @(pago.Estado == "Pagado" ? "paid" : "pending")">@pago.Estado</span></td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</div>
+
+@code {
+    private List<PacienteDto> _pacientes = new();
+    private List<CitaDto> _citas = new();
+    private List<CirugiaOpcionDto> _cirugias = new();
+    private List<PagoDto> _pagos = new();
+    private List<PolizaDto> _polizas = new();
+    private PacienteDto? _pacienteSeleccionado;
+    private int _pacienteId;
+    private int _citaId;
+    private int _cirugiaId;
+    private int? _seguroId;
+    private string _tipoVinculo = "Paciente";
+    private decimal _montoTotal;
+    private decimal _montoSeguro;
+    private string _estado = "Pagado";
+    private string _metodoPago = "Efectivo";
+    private string _concepto = "";
+    private string _buscar = "";
+    private string? _error, _success;
+    private bool _cargando = true;
+    private bool _guardando;
+
+    private IEnumerable<CitaDto> CitasDelPaciente => _citas.Where(c => c.PacienteId == _pacienteId).OrderByDescending(c => c.Fecha);
+    private IEnumerable<CirugiaOpcionDto> CirugiasDelPaciente => _cirugias.Where(c => c.PacienteId == _pacienteId).OrderByDescending(c => c.FechaCirugia);
+    private decimal MontoPaciente => Math.Max(0, _montoTotal - (_pacienteSeleccionado?.TieneSeguro == true ? _montoSeguro : 0));
+    private IEnumerable<PagoDto> PagosVisibles => _pagos.Where(p => string.IsNullOrWhiteSpace(_buscar)
+        || p.Paciente.Contains(_buscar.Trim(), StringComparison.OrdinalIgnoreCase)
+        || (p.Concepto ?? "").Contains(_buscar.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        _cargando = true;
+        try
+        {
+            var pacientesTask = Http.GetFromJsonAsync<Envelope<List<PacienteDto>>>("api/Pacientes");
+            var citasTask = Http.GetFromJsonAsync<Envelope<List<CitaDto>>>("api/Citas");
+            var cirugiasTask = Http.GetFromJsonAsync<List<CirugiaOpcionDto>>("api/Pagos/opciones-cirugias");
+            var pagosTask = Http.GetFromJsonAsync<Envelope<List<PagoDto>>>("api/Pagos");
+            await Task.WhenAll(pacientesTask, citasTask, cirugiasTask, pagosTask);
+            _pacientes = (await pacientesTask)?.Value ?? new();
+            _citas = (await citasTask)?.Value ?? new();
+            _cirugias = await cirugiasTask ?? new();
+            _pagos = (await pagosTask)?.Value ?? new();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            _error = "No se pudieron cargar los datos de cobros.";
+        }
+        finally { _cargando = false; }
+    }
+
+    private async Task PacienteCambiadoAsync(ChangeEventArgs args)
+    {
+        int.TryParse(args.Value?.ToString(), out _pacienteId);
+        _pacienteSeleccionado = _pacientes.FirstOrDefault(p => p.PacienteId == _pacienteId);
+        _polizas.Clear();
+        _seguroId = null;
+        _montoSeguro = 0;
+        _citaId = 0;
+        _cirugiaId = 0;
+        if (_pacienteSeleccionado?.TieneSeguro == true)
+        {
+            try
+            {
+                var result = await Http.GetFromJsonAsync<Envelope<List<PolizaDto>>>($"api/Seguros/paciente/{_pacienteId}");
+                _polizas = result?.Value?.Where(p => p.Seguro?.Activo == true).ToList() ?? new();
+                _seguroId = _polizas.FirstOrDefault()?.SeguroId;
+            }
+            catch (HttpRequestException) { _error = "No se pudieron cargar las aseguradoras del paciente."; }
+        }
+    }
+
+    private void VinculoCambiado(ChangeEventArgs args)
+    {
+        _tipoVinculo = args.Value?.ToString() ?? "Paciente";
+        _citaId = 0;
+        _cirugiaId = 0;
+    }
+
+    private void CitaCambiada(ChangeEventArgs args)
+    {
+        int.TryParse(args.Value?.ToString(), out _citaId);
+        var cita = CitasDelPaciente.FirstOrDefault(c => c.CitaId == _citaId);
+        if (cita is not null) _montoTotal = cita.Costo;
+    }
+
+    private void CirugiaCambiada(ChangeEventArgs args) => int.TryParse(args.Value?.ToString(), out _cirugiaId);
+    private void SeguroCambiado(ChangeEventArgs args) => _seguroId = int.TryParse(args.Value?.ToString(), out var id) ? id : null;
+
+    private async Task GuardarPagoAsync()
+    {
+        _error = null;
+        _success = null;
+        if (_pacienteSeleccionado is null) { _error = "Selecciona un paciente."; return; }
+        if (_tipoVinculo == "Cita" && _citaId <= 0) { _error = "Selecciona la cita relacionada o vincula el cobro al perfil del paciente."; return; }
+        if (_tipoVinculo == "Cirugia" && _cirugiaId <= 0) { _error = "Selecciona la cirugía relacionada o vincula el cobro al perfil del paciente."; return; }
+        if (_montoTotal <= 0) { _error = "El monto total debe ser mayor que cero."; return; }
+        if (_pacienteSeleccionado.TieneSeguro && (_montoSeguro < 0 || _montoSeguro > _montoTotal)) { _error = "La cobertura debe estar entre cero y el monto total."; return; }
+
+        _guardando = true;
+        try
+        {
+            var pago = new
+            {
+                PacienteId = _pacienteId,
+                SeguroId = _pacienteSeleccionado.TieneSeguro ? _seguroId : null,
+                CitaId = _tipoVinculo == "Cita" ? _citaId : (int?)null,
+                CirugiaId = _tipoVinculo == "Cirugia" ? _cirugiaId : (int?)null,
+                Monto = _montoTotal,
+                MontoSeguro = _pacienteSeleccionado.TieneSeguro ? _montoSeguro : 0m,
+                Estado = _estado,
+                MetodoPago = _metodoPago,
+                Concepto = string.IsNullOrWhiteSpace(_concepto) ? null : _concepto.Trim()
+            };
+            using var response = await Http.PostAsJsonAsync("api/Pagos", pago);
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = "No se pudo registrar el cobro. " + await response.Content.ReadAsStringAsync();
+                return;
+            }
+
+            var envelope = await Http.GetFromJsonAsync<Envelope<List<PagoDto>>>("api/Pagos");
+            _pagos = envelope?.Value ?? new();
+            _success = "El cobro se registró correctamente.";
+            _montoTotal = _montoSeguro = 0;
+            _concepto = "";
+            _estado = "Pagado";
+            _tipoVinculo = "Paciente";
+            _citaId = _cirugiaId = 0;
+        }
+        catch (HttpRequestException ex) { _error = "No se pudo conectar con la API: " + ex.Message; }
+        finally { _guardando = false; }
+    }
+
+    private static decimal Copago(PagoDto pago) => Math.Max(0, pago.Monto - pago.MontoSeguro);
+    private static string Asociacion(PagoDto pago) => pago.CitaId.HasValue
+        ? $"Cita {pago.TipoCita ?? ""} · {pago.FechaCita:dd/MM/yyyy}"
+        : pago.CirugiaId.HasValue ? $"Cirugía · {pago.FechaCirugia:dd/MM/yyyy}" : "Perfil del paciente";
+
+    private sealed class Envelope<T> { public T? Value { get; set; } }
+    private sealed class PacienteDto { public int PacienteId { get; set; } public string Nombre { get; set; } = ""; public string Apellido { get; set; } = ""; public bool TieneSeguro { get; set; } }
+    private sealed class CitaDto { public int CitaId { get; set; } public int PacienteId { get; set; } public DateTime Fecha { get; set; } public string? TipoCita { get; set; } public decimal Costo { get; set; } }
+    private sealed class CirugiaOpcionDto { public int CirugiaId { get; set; } public int PacienteId { get; set; } public DateTime FechaCirugia { get; set; } public string Paciente { get; set; } = ""; }
+    private sealed class PolizaDto { public int SeguroId { get; set; } public SeguroDto? Seguro { get; set; } }
+    private sealed class SeguroDto { public string? Nombre { get; set; } public bool Activo { get; set; } }
+    private sealed class PagoDto { public int PagoId { get; set; } public DateTime Fecha { get; set; } public int? PacienteId { get; set; } public string Paciente { get; set; } = ""; public int? CitaId { get; set; } public DateTime? FechaCita { get; set; } public string? TipoCita { get; set; } public int? CirugiaId { get; set; } public DateTime? FechaCirugia { get; set; } public decimal Monto { get; set; } public decimal MontoSeguro { get; set; } public string? Aseguradora { get; set; } public string? MetodoPago { get; set; } public string? Concepto { get; set; } public string Estado { get; set; } = "Pendiente"; }
+}

@@ -1,6 +1,6 @@
 
 @page "/citas"
-@attribute [Authorize(Roles = "Doctor,Secretaria")]
+@attribute [Authorize(Roles = "Doctora,Secretaria")]
 @using System.Net.Http.Json
 @inject HttpClient Http
 
@@ -44,16 +44,16 @@
         <div class="appointment-stat-card">
             <div class="appointment-stat-icon">✓</div>
             <div>
-                <h3>@AppointmentList.Count(a => a.Status == "Confirmada")</h3>
-                <p>Confirmadas</p>
+                <h3>@AppointmentList.Count(a => a.Status == "Llegó")</h3>
+                <p>En sala de espera</p>
             </div>
         </div>
 
         <div class="appointment-stat-card">
             <div class="appointment-stat-icon">◷</div>
             <div>
-                <h3>@AppointmentList.Count(a => a.Status == "Pendiente")</h3>
-                <p>Pendientes</p>
+                <h3>@AppointmentList.Count(a => a.Status is "Atendida" or "Completada")</h3>
+                <p>Atendidas</p>
             </div>
         </div>
 
@@ -72,62 +72,82 @@
     {
         <div class="appointments-panel appointment-form">
 
-            <h3>Nueva cita</h3>
+            <h3>@(EditingCitaId == 0 ? "Nueva cita" : "Editar cita")</h3>
 
-            @if (Patients.Count == 0)
-            {
-                <p>
-                    No hay pacientes registrados.
-                    Registra primero un paciente para poder crear una cita.
-                </p>
-            }
-            else
-            {
-                <div class="appointment-form-group">
-                    <label>Paciente</label>
-
+            <div class="appointment-form-group">
+                <label>Paciente</label>
+                @if (Patients.Count == 0)
+                {
+                    <p>No hay pacientes registrados. Registra uno aquí; el correo es opcional.</p>
+                }
+                else
+                {
                     <select class="form-select" @bind="NewPatientId">
                         <option value="0">Selecciona un paciente</option>
-
-                        @foreach (var patient in Patients)
+                        @foreach (var patient in Patients.OrderBy(p => p.Nombre).ThenBy(p => p.Apellido))
                         {
-                            <option value="@patient.PacienteId">
-                                @patient.Nombre @patient.Apellido
-                            </option>
+                            <option value="@patient.PacienteId">@patient.Nombre @patient.Apellido</option>
                         }
                     </select>
+                }
+                @if (EditingCitaId == 0)
+                {
+                    <button type="button" class="btn-secondary-custom" @onclick="TogglePatientForm">
+                        @(ShowPatientForm ? "Cerrar registro de paciente" : "+ Registrar paciente nuevo")
+                    </button>
+                }
+            </div>
+
+            @if (ShowPatientForm)
+            {
+                <section class="appointment-form-group quick-patient-form">
+                    <h4>Registro rápido de paciente</h4>
+                    <div class="appointment-form-grid">
+                        <label>Nombre *<input class="form-control" @bind="NewPatientName" /></label>
+                        <label>Apellido *<input class="form-control" @bind="NewPatientSurname" /></label>
+                        <label>Cédula (opcional)<input class="form-control" @bind="NewPatientCedula" /></label>
+                        <label>Teléfono (opcional)<input class="form-control" @bind="NewPatientPhone" /></label>
+                        <label>Correo electrónico (opcional)<input class="form-control" @bind="NewPatientEmail" /></label>
+                        <label class="quick-insurance-check"><input class="quick-insurance-toggle" type="checkbox" @bind="NewPatientTieneSeguro" /> Tiene seguro médico</label>
+                        @if (NewPatientTieneSeguro)
+                        {
+                            <label>Aseguradora (opcional)
+                                <select class="form-select" @bind="NewPatientSeguroId">
+                                    <option value="0">Sin aseguradora vinculada</option>
+                                    @foreach (var seguro in InsuranceCompanies)
+                                    {
+                                        <option value="@seguro.SeguroId">@seguro.Nombre</option>
+                                    }
+                                </select>
+                            </label>
+                            <label>Número de póliza (opcional)<input class="form-control" @bind="NewPatientNumeroPoliza" /></label>
+                        }
+                    </div>
+                    <button type="button" class="btn-primary-custom" @onclick="CrearPacienteAsync" disabled="@IsCreatingPatient">
+                        @(IsCreatingPatient ? "Registrando..." : "Registrar y seleccionar paciente")
+                    </button>
+                </section>
+            }
+
+                <div class="appointment-form-group">
+                    <label>Motivo / tipo de cita</label>
+                    <input type="text" class="form-control" maxlength="250" placeholder="Consulta, evaluación, seguimiento..." @bind="NewType" />
                 </div>
 
                 <div class="appointment-form-group">
-                    <label>Tipo de cita</label>
-
-                    <select class="form-select" @bind="NewType">
-                        <option value="">Selecciona el tipo</option>
-                        <option value="Consulta">Consulta</option>
-                        <option value="Evaluación">Evaluación</option>
-                        <option value="Cirugía">Cirugía</option>
-                        <option value="Seguimiento">Seguimiento</option>
-                        <option value="Postoperatorio">Postoperatorio</option>
-                    </select>
+                    <label>Fecha y hora</label>
+                    <input type="datetime-local" class="form-control" step="60" @bind="NewDateTime" @bind:format="yyyy-MM-ddTHH:mm" />
                 </div>
 
-                <div class="appointment-form-group">
-                    <label>Fecha</label>
-
-                    <input type="date"
-                           class="form-control"
-                           @bind="NewDate"
-                           @bind:format="yyyy-MM-dd" />
-                </div>
-
-                <div class="appointment-form-group">
-                    <label>Hora</label>
-
-                    <input type="time"
-                           class="form-control"
-                           @bind="NewTime"
-                           @bind:format="HH:mm" />
-                </div>
+                @if (EditingCitaId != 0)
+                {
+                    <div class="appointment-form-group">
+                        <label>Estado de la cita</label>
+                        <select class="form-select" @bind="NewStatus">
+                            @foreach (var status in AppointmentStatuses) { <option value="@status">@status</option> }
+                        </select>
+                    </div>
+                }
 
                 <div class="appointment-form-group">
                     <label>Costo (RD$)</label>
@@ -163,8 +183,6 @@
                     </button>
 
                 </div>
-            }
-
         </div>
     }
 
@@ -179,11 +197,13 @@
                    @bind="SearchText"
                    @bind:event="oninput" />
 
-            <select class="form-select"
-                    style="max-width: 180px;"
-                    @bind="SelectedStatus">
+                    <select class="form-select"
+                            style="max-width: 220px;"
+                            @bind="SelectedStatus">
 
                 <option value="Todas">Todos los estados</option>
+                <option value="Llegó">En sala de espera / Llegó</option>
+                <option value="Atendida">Atendidas</option>
                 <option value="Confirmada">Confirmadas</option>
                 <option value="Pendiente">Pendientes</option>
                 <option value="Cancelada">Canceladas</option>
@@ -253,11 +273,14 @@
                                             @onchange="(e) => UpdateAppointmentStatus(appointment, e.Value?.ToString())">
 
                                         <option value="Pendiente">Pendiente</option>
+                                        <option value="Llegó">En sala de espera / Llegó</option>
+                                        <option value="Atendida">Atendida</option>
                                         <option value="Confirmada">Confirmada</option>
                                         <option value="Completada">Completada</option>
                                         <option value="Cancelada">Cancelada</option>
 
                                     </select>
+                                    <button type="button" class="btn-secondary-custom appointment-edit-button" @onclick="() => EditAppointment(appointment)">Editar cita</button>
                                 </td>
                             </tr>
                         }
@@ -275,25 +298,40 @@
 
 @code {
 
+    private static readonly string[] AppointmentStatuses = ["Pendiente", "Llegó", "Atendida", "Cancelada", "Confirmada", "Completada"];
+
     // LISTAS
     private List<AppointmentItem> AppointmentList = new();
     private List<PatientItem> Patients = new();
+    private List<InsuranceItem> InsuranceCompanies = new();
 
     // ESTADOS
     private bool ShowForm;
     private bool IsLoading = true;
     private bool IsSaving;
     private bool IsUpdatingStatus;
+    private bool ShowPatientForm;
+    private bool IsCreatingPatient;
+    private bool NewPatientTieneSeguro;
+    private int NewPatientSeguroId;
 
     // FORMULARIO
+    private int EditingCitaId;
     private int NewPatientId;
     private string NewType = "";
-
-    private DateTime NewDate = DateTime.Today;
-    private TimeOnly NewTime = new TimeOnly(9, 0);
+    private DateTime NewDateTime = DateTime.Today.AddDays(1).AddHours(9);
+    private string NewStatus = "Pendiente";
+    private string EstadoPagoActual = "Pendiente";
+    private int? CitaAnteriorActual;
 
     private decimal NewCost;
     private string NewObservations = "";
+    private string NewPatientName = "";
+    private string NewPatientSurname = "";
+    private string NewPatientCedula = "";
+    private string NewPatientPhone = "";
+    private string NewPatientEmail = "";
+    private string NewPatientNumeroPoliza = "";
 
     // BÚSQUEDA Y FILTROS
     private string SearchText = "";
@@ -318,7 +356,18 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadPatients();
+        await LoadInsuranceCompanies();
         await LoadAppointments();
+    }
+
+    private async Task LoadInsuranceCompanies()
+    {
+        try
+        {
+            var result = await Http.GetFromJsonAsync<ApiResult<List<InsuranceItem>>>("api/Seguros/activos");
+            InsuranceCompanies = result?.Value ?? new();
+        }
+        catch (Exception ex) { ErrorMessage = "No fue posible cargar las aseguradoras: " + ex.Message; }
     }
 
     // CARGAR PACIENTES DESDE LA API
@@ -354,6 +403,7 @@
                 .Select(c => new AppointmentItem
                 {
                     CitaId = c.CitaId,
+                    PacienteId = c.PacienteId,
 
                     Patient = c.Paciente != null
                         ? $"{c.Paciente.Nombre} {c.Paciente.Apellido}"
@@ -365,7 +415,10 @@
 
                     Status = c.Estado,
 
-                    Cost = c.Costo
+                    Cost = c.Costo,
+                    Observations = c.Observaciones ?? "",
+                    EstadoPago = c.EstadoPago ?? "Pendiente",
+                    CitaAnteriorId = c.CitaAnteriorId
                 })
                 .ToList();
         }
@@ -383,10 +436,121 @@
     // MOSTRAR U OCULTAR FORMULARIO
     private void ToggleForm()
     {
-        ShowForm = !ShowForm;
+        if (ShowForm)
+        {
+            ShowForm = false;
+            ResetForm();
+        }
+        else
+        {
+            ResetForm();
+            ShowForm = true;
+        }
         ErrorMessage = "";
         SuccessMessage = "";
     }
+
+    private void EditAppointment(AppointmentItem appointment)
+    {
+        EditingCitaId = appointment.CitaId;
+        NewPatientId = appointment.PacienteId;
+        NewType = appointment.Type == "Sin especificar" ? "" : appointment.Type;
+        NewDateTime = appointment.Date;
+        NewCost = appointment.Cost;
+        NewStatus = appointment.Status;
+        NewObservations = appointment.Observations;
+        EstadoPagoActual = appointment.EstadoPago;
+        CitaAnteriorActual = appointment.CitaAnteriorId;
+        ShowPatientForm = false;
+        ShowForm = true;
+        ErrorMessage = "";
+        SuccessMessage = "";
+    }
+
+    private void TogglePatientForm()
+    {
+        ShowPatientForm = !ShowPatientForm;
+        ErrorMessage = "";
+        SuccessMessage = "";
+    }
+
+    private async Task CrearPacienteAsync()
+    {
+        ErrorMessage = "";
+        SuccessMessage = "";
+        if (string.IsNullOrWhiteSpace(NewPatientName) || string.IsNullOrWhiteSpace(NewPatientSurname))
+        {
+            ErrorMessage = "El nombre y el apellido del paciente son obligatorios.";
+            return;
+        }
+
+        IsCreatingPatient = true;
+        try
+        {
+            var cedula = Limpiar(NewPatientCedula);
+            var telefono = Limpiar(NewPatientPhone);
+            var email = Limpiar(NewPatientEmail);
+            var payload = new
+            {
+                FechaRegistro = DateTime.Now,
+                Nombre = NewPatientName.Trim(),
+                Apellido = NewPatientSurname.Trim(),
+                Cedula = cedula,
+                Telefono = telefono,
+                Email = email,
+                TieneSeguro = NewPatientTieneSeguro
+            };
+
+            using var response = await Http.PostAsJsonAsync("api/Pacientes", payload);
+            if (!response.IsSuccessStatusCode)
+            {
+                ErrorMessage = "No se pudo registrar el paciente. " + await response.Content.ReadAsStringAsync();
+                return;
+            }
+
+            var idsAnteriores = Patients.Select(p => p.PacienteId).ToHashSet();
+            await LoadPatients();
+            var pacienteCreado = Patients.FirstOrDefault(p => !idsAnteriores.Contains(p.PacienteId))
+                ?? Patients.Where(p => p.Nombre.Equals(payload.Nombre, StringComparison.OrdinalIgnoreCase)
+                    && p.Apellido.Equals(payload.Apellido, StringComparison.OrdinalIgnoreCase)
+                    && p.Telefono == telefono)
+                    .OrderByDescending(p => p.PacienteId)
+                    .FirstOrDefault();
+
+            if (pacienteCreado is null)
+            {
+                ErrorMessage = "El paciente se registró, pero no se pudo seleccionar automáticamente. Selecciónalo en la lista.";
+                return;
+            }
+
+            NewPatientId = pacienteCreado.PacienteId;
+            if (NewPatientTieneSeguro && NewPatientSeguroId > 0)
+            {
+                var poliza = new
+                {
+                    PacienteId = pacienteCreado.PacienteId,
+                    SeguroId = NewPatientSeguroId,
+                    NumeroPoliza = Limpiar(NewPatientNumeroPoliza),
+                    Titular = (string?)null,
+                    FechaVencimiento = (DateOnly?)null,
+                    Observaciones = (string?)null
+                };
+                using var seguroResponse = await Http.PostAsJsonAsync("api/Seguros/polizas", poliza);
+                if (!seguroResponse.IsSuccessStatusCode)
+                    ErrorMessage = "Paciente registrado, pero no se pudo asociar la póliza: " + await seguroResponse.Content.ReadAsStringAsync();
+            }
+            ShowPatientForm = false;
+            SuccessMessage = "Paciente registrado y seleccionado. Ya puedes agendar la cita.";
+            NewPatientName = NewPatientSurname = NewPatientCedula = NewPatientPhone = NewPatientEmail = "";
+            NewPatientNumeroPoliza = "";
+            NewPatientSeguroId = 0;
+            NewPatientTieneSeguro = false;
+        }
+        catch (HttpRequestException ex) { ErrorMessage = "No se pudo conectar con la API: " + ex.Message; }
+        finally { IsCreatingPatient = false; }
+    }
+
+    private static string? Limpiar(string? valor) => string.IsNullOrWhiteSpace(valor) ? null : valor.Trim();
 
     // GUARDAR UNA CITA
     private async Task SaveAppointment()
@@ -408,32 +572,32 @@
             return;
         }
 
-        DateTime appointmentDate =
-            NewDate.Date.Add(NewTime.ToTimeSpan());
-
         IsSaving = true;
 
         try
         {
             var cita = new
             {
-                Fecha = appointmentDate,
+                CitaId = EditingCitaId,
+                Fecha = NewDateTime,
                 PacienteId = NewPatientId,
-                TipoCita = NewType,
+                TipoCita = NewType.Trim(),
                 Costo = NewCost,
-                Estado = "Pendiente",
-                EstadoPago = "Pendiente",
+                Estado = EditingCitaId == 0 ? "Pendiente" : NewStatus,
+                EstadoPago = EditingCitaId == 0 ? "Pendiente" : EstadoPagoActual,
                 Observaciones = NewObservations,
-                CitaAnteriorId = (int?)null
+                CitaAnteriorId = EditingCitaId == 0 ? (int?)null : CitaAnteriorActual
             };
 
-            var result =
-                await Http.PostAsJsonAsync("api/Citas", cita);
+            using var result = EditingCitaId == 0
+                ? await Http.PostAsJsonAsync("api/Citas", cita)
+                : await Http.PutAsJsonAsync($"api/Citas/{EditingCitaId}", cita);
 
             if (result.IsSuccessStatusCode)
             {
-                SuccessMessage =
-                    "La cita se registró correctamente.";
+                SuccessMessage = EditingCitaId == 0
+                    ? "La cita se registró correctamente."
+                    : "Los cambios de la cita se guardaron correctamente.";
 
                 ResetForm();
 
@@ -519,14 +683,17 @@
     // LIMPIAR FORMULARIO
     private void ResetForm()
     {
+        EditingCitaId = 0;
         NewPatientId = 0;
         NewType = "";
-
-        NewDate = DateTime.Today;
-        NewTime = new TimeOnly(9, 0);
+        NewDateTime = DateTime.Today.AddDays(1).AddHours(9);
+        NewStatus = "Pendiente";
+        EstadoPagoActual = "Pendiente";
+        CitaAnteriorActual = null;
 
         NewCost = 0;
         NewObservations = "";
+        ShowPatientForm = false;
     }
 
     // CLASE CSS SEGÚN ESTADO
@@ -534,7 +701,8 @@
     {
         return status switch
         {
-            "Confirmada" => "status-confirmed",
+            "Confirmada" or "Llegó" => "status-confirmed",
+            "Atendida" => "status-completed",
             "Pendiente" => "status-pending",
             "Cancelada" => "status-cancelled",
             "Completada" => "status-completed",
@@ -557,6 +725,14 @@
         public string Nombre { get; set; } = "";
 
         public string Apellido { get; set; } = "";
+
+        public string? Telefono { get; set; }
+    }
+
+    private class InsuranceItem
+    {
+        public int SeguroId { get; set; }
+        public string Nombre { get; set; } = "";
     }
 
     // MODELO DE CITA RECIBIDO DE LA API
@@ -574,6 +750,12 @@
 
         public string Estado { get; set; } = "";
 
+        public string? EstadoPago { get; set; }
+
+        public string? Observaciones { get; set; }
+
+        public int? CitaAnteriorId { get; set; }
+
         public PatientItem? Paciente { get; set; }
     }
 
@@ -581,6 +763,8 @@
     private class AppointmentItem
     {
         public int CitaId { get; set; }
+
+        public int PacienteId { get; set; }
 
         public string Patient { get; set; } = "";
 
@@ -591,6 +775,12 @@
         public string Status { get; set; } = "";
 
         public decimal Cost { get; set; }
+
+        public string Observations { get; set; } = "";
+
+        public string EstadoPago { get; set; } = "Pendiente";
+
+        public int? CitaAnteriorId { get; set; }
     }
 }
 

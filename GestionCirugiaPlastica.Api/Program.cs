@@ -2,6 +2,7 @@ using Aplicada1.Core;
 using GestionCirugiaPlastica.Infrastructure.Models;
 using GestionCirugiaPlastica.Application.Services;
 using GestionCirugiaPlastica.Infrastructure.Data;
+using GestionCirugiaPlastica.Api.Services;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 using System.Text.Json.Serialization.Metadata;
@@ -39,6 +40,7 @@ builder.Services.AddScoped<RecetasServices>();
 builder.Services.AddScoped<RolesServices>();
 builder.Services.AddScoped<SegurosServices>();
 builder.Services.AddScoped<UsuariosServices>();
+builder.Services.AddSingleton<JwtTokenService>();
 
 // Configuración de CORS para permitir la comunicación con Blazor
 builder.Services.AddCors(options =>
@@ -116,6 +118,7 @@ using (var scope = app.Services.CreateScope())
     var demoPasswords = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
         ["doctor.demo"] = "DoctorTest!2026",
+        ["asistente.demo"] = "AsistenteTest!2026",
         ["secretaria.demo"] = "SecretariaTest!2026",
         ["paciente.demo"] = "PacienteTest!2026"
     };
@@ -143,6 +146,7 @@ app.MapScalarApiReference(options =>
 });
 
 app.UseHttpsRedirection();
+app.UseStaticFiles();
 
 // Activar CORS
 app.UseCors("BlazorPolicy");

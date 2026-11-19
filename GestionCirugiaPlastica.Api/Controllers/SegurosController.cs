@@ -6,19 +6,35 @@ namespace GestionCirugiaPlastica.Api.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-[Authorize(Roles = "Doctor,Secretaria")]
+[Authorize(Roles = "Doctora,Secretaria")]
 public class SegurosController(SegurosServices segurosService) : ControllerBase
 {
     // Registrar o actualizar una aseguradora
     [HttpPost]
+    [Authorize(Roles = "Doctora")]
     public async Task<IActionResult> Guardar([FromBody] Seguro seguro)
     {
         var resultado = await segurosService.Guardar(seguro);
         return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
+    [HttpPut("{id:int}")]
+    [Authorize(Roles = "Doctora")]
+    public async Task<IActionResult> Actualizar(int id, [FromBody] Seguro seguro)
+    {
+        if (id != seguro.SeguroId)
+            return BadRequest("El ID de la ruta no coincide con el ID de la aseguradora.");
+
+        var existente = await segurosService.Buscar(id);
+        if (existente.Value is null) return NotFound();
+
+        var resultado = await segurosService.Guardar(seguro);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
+    }
+
     // Buscar aseguradora por ID
     [HttpGet("{id:int}")]
+    [Authorize(Roles = "Doctora")]
     public async Task<IActionResult> Buscar(int id)
     {
         var resultado = await segurosService.Buscar(id);
@@ -31,6 +47,7 @@ public class SegurosController(SegurosServices segurosService) : ControllerBase
 
     // Obtener todas las aseguradoras
     [HttpGet]
+    [Authorize(Roles = "Doctora")]
     public async Task<IActionResult> GetList()
     {
         var resultado = await segurosService.GetList(s => true);
@@ -39,6 +56,7 @@ public class SegurosController(SegurosServices segurosService) : ControllerBase
 
     // Buscar aseguradoras por nombre
     [HttpGet("nombre")]
+    [Authorize(Roles = "Doctora")]
     public async Task<IActionResult> BuscarPorNombre([FromQuery] string nombre)
     {
         var resultado = await segurosService.BuscarPorNombre(nombre);
@@ -63,6 +81,7 @@ public class SegurosController(SegurosServices segurosService) : ControllerBase
 
     // Buscar pacientes asociados a una aseguradora
     [HttpGet("{seguroId:int}/pacientes")]
+    [Authorize(Roles = "Doctora")]
     public async Task<IActionResult> BuscarPacientes(int seguroId)
     {
         var resultado = await segurosService.BuscarPacientes(seguroId);
@@ -99,6 +118,7 @@ public class SegurosController(SegurosServices segurosService) : ControllerBase
 
     // Buscar pólizas vencidas
     [HttpGet("polizas/vencidas")]
+    [Authorize(Roles = "Doctora")]
     public async Task<IActionResult> BuscarPolizasVencidas()
     {
         var resultado = await segurosService.BuscarPolizasVencidas();
@@ -107,6 +127,7 @@ public class SegurosController(SegurosServices segurosService) : ControllerBase
 
     // Buscar pólizas próximas a vencer
     [HttpGet("polizas/por-vencer")]
+    [Authorize(Roles = "Doctora")]
     public async Task<IActionResult> BuscarPolizasPorVencer([FromQuery] int diasAnticipacion = 30)
     {
         var resultado = await segurosService.BuscarPolizasPorVencer(diasAnticipacion);
@@ -115,6 +136,7 @@ public class SegurosController(SegurosServices segurosService) : ControllerBase
 
     // Desactivar una aseguradora
     [HttpPatch("{id:int}/desactivar")]
+    [Authorize(Roles = "Doctora")]
     public async Task<IActionResult> Desactivar(int id)
     {
         var resultado = await segurosService.Desactivar(id);
@@ -123,6 +145,7 @@ public class SegurosController(SegurosServices segurosService) : ControllerBase
 
     // Reactivar una aseguradora
     [HttpPatch("{id:int}/activar")]
+    [Authorize(Roles = "Doctora")]
     public async Task<IActionResult> Activar(int id)
     {
         var resultado = await segurosService.Activar(id);
@@ -131,6 +154,7 @@ public class SegurosController(SegurosServices segurosService) : ControllerBase
 
     // El servicio no permite eliminar aseguradoras (siempre devuelve fallo)
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = "Doctora")]
     public async Task<IActionResult> Eliminar(int id)
     {
         var resultado = await segurosService.Eliminar(id);

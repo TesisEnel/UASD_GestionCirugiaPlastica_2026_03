@@ -1,0 +1,244 @@
+@page "/perfil"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using System.Text.Json
+@inject HttpClient Http
+@inject AuthService Auth
+@inject UserProfileState ProfileState
+
+<PageTitle>Mi perfil | Tanger Clinic</PageTitle>
+
+<div class="med-page account-page">
+    <header class="med-page-header">
+        <div><h1>Mi perfil</h1><p>Actualiza tus datos de acceso y tu foto de perfil.</p></div>
+    </header>
+
+    @if (_error is not null) { <div class="med-error" role="alert">@_error</div> }
+    @if (_success is not null) { <div class="payment-success" role="status">@_success</div> }
+
+    @if (_loading)
+    {
+        <section class="med-card"><p>Cargando perfil…</p></section>
+    }
+    else if (_profile is not null)
+    {
+        <div class="profile-page-grid">
+            <section class="med-card profile-photo-card">
+                <div class="profile-photo-preview">
+                    @if (!string.IsNullOrWhiteSpace(_profile.FotoUrl))
+                    {
+                        <img src="@FotoSource(_profile.FotoUrl)" alt="Foto de perfil actual" />
+                    }
+                    else
+                    {
+                        <i class="fa-solid fa-user"></i>
+                    }
+                </div>
+                <h2>@_profile.NombreCompleto</h2>
+                <span class="profile-role-badge">@_profile.Rol</span>
+                <label class="profile-file-label" for="profile-photo-input">Seleccionar foto</label>
+                <InputFile id="profile-photo-input" OnChange="SeleccionarFoto" accept="image/png,image/jpeg,image/webp" />
+                @if (_selectedPhoto is not null)
+                {
+                    <p class="profile-file-name">@_selectedPhoto.Name</p>
+                    <button type="button" class="med-primary" @onclick="SubirFotoAsync" disabled="@_uploading">
+                        @(_uploading ? "Subiendo…" : "Guardar foto")
+                    </button>
+                }
+                <small>JPEG, PNG o WebP. Máximo 5 MB.</small>
+            </section>
+
+            <section class="med-card">
+                <h2>Datos de la cuenta</h2>
+                <EditForm Model="_form" OnValidSubmit="GuardarPerfilAsync">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+                    <div class="account-form-grid">
+                        <label>Nombre completo *<InputText @bind-Value="_form.NombreCompleto" autocomplete="name" /></label>
+                        <label>Nombre de usuario<InputText Value="_profile.NombreUsuario" disabled /></label>
+                        <label>Correo electrónico<InputText Value="_profile.Email" disabled /></label>
+                        <label>Rol<InputText Value="_profile.Rol" disabled /></label>
+                    </div>
+
+                    <h3>Cambiar contraseña <span>(opcional)</span></h3>
+                    <p class="account-help">Para guardar una contraseña nueva, ingresa primero la actual. Debe tener al menos 12 caracteres.</p>
+                    <div class="account-form-grid">
+                        <label>Contraseña actual<InputText type="password" @bind-Value="_form.PasswordActual" autocomplete="current-password" /></label>
+                        <label>Nueva contraseña<InputText type="password" @bind-Value="_form.PasswordNueva" autocomplete="new-password" /></label>
+                    </div>
+
+                    <button type="submit" class="med-primary" disabled="@_saving">@(_saving ? "Guardando…" : "Guardar cambios")</button>
+                </EditForm>
+            </section>
+        </div>
+    }
+</div>
+
+@code {
+    private const long MaxPhotoBytes = 5 * 1024 * 1024;
+    private UserProfileDto? _profile;
+    private readonly ProfileForm _form = new();
+    private IBrowserFile? _selectedPhoto;
+    private bool _loading = true;
+    private bool _saving;
+    private bool _uploading;
+    private string? _error;
+    private string? _success;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _profile = await Http.GetFromJsonAsync<UserProfileDto>("api/Perfil");
+            if (_profile is not null)
+            {
+                _form.NombreCompleto = _profile.NombreCompleto;
+                ProfileState.Set(_profile);
+            }
+            else
+            {
+                _error = "No se pudo cargar tu perfil.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            _error = "No se pudo cargar tu perfil. Inicia sesión de nuevo e inténtalo otra vez.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task GuardarPerfilAsync()
+    {
+        if (_profile is null) return;
+        _saving = true;
+        _error = null;
+        _success = null;
+        try
+        {
+            var request = new ProfileUpdateRequest(
+                _form.NombreCompleto.Trim(),
+                _form.PasswordActual,
+                _form.PasswordNueva);
+            using var response = await Http.PutAsJsonAsync("api/Perfil", request);
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await ReadErrorAsync(response);
+                return;
+            }
+
+            _profile = await response.Content.ReadFromJsonAsync<UserProfileDto>();
+            if (_profile is null)
+            {
+                _error = "El servidor no devolvió los datos actualizados.";
+                return;
+            }
+
+            var accessToken = _profile.AccessToken;
+            if (!string.IsNullOrWhiteSpace(accessToken))
+                await Auth.SetTokenAsync(accessToken);
+            _profile.AccessToken = null;
+            ProfileState.Set(_profile);
+            _form.NombreCompleto = _profile.NombreCompleto;
+            _form.PasswordActual = "";
+            _form.PasswordNueva = "";
+            _success = "Tu perfil se actualizó correctamente.";
+        }
+        catch (HttpRequestException)
+        {
+            _error = "No se pudo conectar con la API.";
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void SeleccionarFoto(InputFileChangeEventArgs args)
+    {
+        _error = null;
+        _success = null;
+        _selectedPhoto = args.File;
+        if (_selectedPhoto.Size > MaxPhotoBytes)
+        {
+            _selectedPhoto = null;
+            _error = "La imagen no puede superar 5 MB.";
+        }
+    }
+
+    private async Task SubirFotoAsync()
+    {
+        if (_selectedPhoto is null || _profile is null) return;
+        _uploading = true;
+        _error = null;
+        _success = null;
+        try
+        {
+            using var content = new MultipartFormDataContent();
+            await using var stream = _selectedPhoto.OpenReadStream(MaxPhotoBytes);
+            using var fileContent = new StreamContent(stream);
+            content.Add(fileContent, "file", _selectedPhoto.Name);
+            using var response = await Http.PostAsync("api/Perfil/foto", content);
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await ReadErrorAsync(response);
+                return;
+            }
+
+            _profile = await response.Content.ReadFromJsonAsync<UserProfileDto>();
+            if (_profile is not null)
+            {
+                ProfileState.Set(_profile);
+                _success = "La foto de perfil se actualizó correctamente.";
+                _selectedPhoto = null;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            _error = "No se pudo conectar con la API.";
+        }
+        catch (IOException)
+        {
+            _error = "No se pudo leer el archivo seleccionado.";
+        }
+        finally
+        {
+            _uploading = false;
+        }
+    }
+
+    private string FotoSource(string fotoUrl)
+    {
+        if (Uri.TryCreate(fotoUrl, UriKind.Absolute, out var absolute))
+            return absolute.ToString();
+        return new Uri(Http.BaseAddress!, fotoUrl).ToString();
+    }
+
+    private static async Task<string> ReadErrorAsync(HttpResponseMessage response)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            if (document.RootElement.TryGetProperty("message", out var message))
+                return message.GetString() ?? "No se pudo completar la operación.";
+            if (document.RootElement.TryGetProperty("title", out var title))
+                return title.GetString() ?? "No se pudo completar la operación.";
+        }
+        catch (JsonException) { }
+        return "No se pudo completar la operación.";
+    }
+
+    private sealed class ProfileForm
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Ingresa tu nombre completo.")]
+        [System.ComponentModel.DataAnnotations.StringLength(250)]
+        public string NombreCompleto { get; set; } = "";
+        public string? PasswordActual { get; set; }
+        [System.ComponentModel.DataAnnotations.MinLength(12, ErrorMessage = "La nueva contraseña debe tener al menos 12 caracteres.")]
+        public string? PasswordNueva { get; set; }
+    }
+
+    private sealed record ProfileUpdateRequest(string NombreCompleto, string? PasswordActual, string? PasswordNueva);
+}

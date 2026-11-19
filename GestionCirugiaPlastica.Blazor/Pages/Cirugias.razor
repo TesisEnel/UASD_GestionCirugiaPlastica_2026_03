@@ -1,5 +1,5 @@
 @page "/cirugias"
-@attribute [Authorize(Roles = "Doctor")]
+@attribute [Authorize(Roles = "Doctora,AsistenteClinico")]
 @inject HttpClient Http
 
 <PageTitle>Cirugías | Tanger Clinic</PageTitle>
@@ -8,8 +8,31 @@
         <div><h1>Cirugías</h1><p>Control clínico y seguimiento de operaciones</p></div>
         <button class="med-primary" @onclick="Nueva">Nueva cirugía</button>
     </header>
+
     @if (_error is not null) { <div class="med-error" role="alert">@_error</div> }
-    <input class="med-search" placeholder="Buscar paciente, procedimiento o diagnóstico" @bind="_buscar" @bind:event="oninput" />
+
+    <section class="med-card surgery-filters" aria-label="Filtros de cirugías">
+        <label>Paciente
+            <input class="med-search" placeholder="Nombre del paciente" @bind="_buscarPaciente" @bind:event="oninput" />
+        </label>
+        <label>Estado clínico
+            <select @bind="_filtroEstado">
+                <option value="">Todos los estados</option>
+                @foreach (var estado in Estados) { <option value="@estado">@estado</option> }
+            </select>
+        </label>
+        <label>Diagnóstico preoperatorio
+            <input placeholder="Buscar diagnóstico" @bind="_buscarDiagnostico" @bind:event="oninput" />
+        </label>
+        <label>Ordenar por
+            <select @bind="_orden">
+                <option value="paciente">Paciente (A-Z)</option>
+                <option value="estado">Estado clínico</option>
+                <option value="diagnostico">Diagnóstico preoperatorio</option>
+            </select>
+        </label>
+    </section>
+
     @if (_form is not null)
     {
         <section class="med-card">
@@ -23,53 +46,132 @@
                     <label class="med-span">Diagnóstico preoperatorio<InputTextArea @bind-Value="_form.DiagnosticoPreoperatorio" /></label>
                     <label class="med-span">Notas / observaciones<InputTextArea @bind-Value="_form.Observaciones" /></label>
                 </div>
+
+                <div class="surgery-form-photos">
+                    <h3>Fotografías de la operación</h3>
+                    @if (_form.CirugiaId == 0)
+                    {
+                        <p>Guarda la cirugía para habilitar la carga de fotografías; aparecerá en el listado con su opción para agregarlas.</p>
+                    }
+                    else
+                    {
+                        <div class="surgery-photo-gallery">
+                            @foreach (var foto in FotosDe(_form.CirugiaId))
+                            {
+                                @if (foto.DataUri is not null)
+                                {
+                                    <button type="button" class="surgery-photo-thumb" title="Ampliar fotografía" @onclick="() => Ampliar(foto)">
+                                        <img src="@foto.DataUri" alt="@DescripcionFoto(foto)" />
+                                    </button>
+                                }
+                            }
+                            @if (FotosDe(_form.CirugiaId).Count == 0) { <span class="surgery-no-photos">Aún no hay fotos asociadas.</span> }
+                        </div>
+                        <label class="photo-upload-control"><span>＋ Agregar fotografía</span><InputFile OnChange="e => SubirFotoAsync(_form.CirugiaId, e)" accept="image/jpeg,image/png,image/webp" /></label>
+                    }
+                </div>
+
                 @if (_formError is not null) { <p class="med-error">@_formError</p> }
                 <button class="med-primary" type="submit" disabled="@_saving">@(_saving ? "Guardando…" : "Guardar")</button>
                 <button class="med-secondary" type="button" @onclick="Cancelar">Cancelar</button>
             </EditForm>
         </section>
     }
+
     <section class="med-card">
         <div class="med-table-scroll"><table class="med-table">
-            <thead><tr><th>Paciente</th><th>Procedimiento</th><th>Fecha</th><th>Diagnóstico preoperatorio</th><th>Estado</th><th>Acción</th></tr></thead>
+            <thead><tr><th>Paciente</th><th>Procedimiento</th><th>Fecha</th><th>Diagnóstico preoperatorio</th><th>Estado</th><th>Fotografías</th><th>Acción</th></tr></thead>
             <tbody>
             @foreach (var c in CirugiasVisibles)
             {
                 <tr>
-                    <td>@c.Paciente?.Nombre @c.Paciente?.Apellido</td><td>@c.Procedimiento?.Nombre</td><td>@c.FechaCirugia.ToString("dd/MM/yyyy")</td>
+                    <td>@c.Paciente?.Nombre @c.Paciente?.Apellido</td>
+                    <td>@c.Procedimiento?.Nombre</td>
+                    <td>@c.FechaCirugia.ToString("dd/MM/yyyy")</td>
                     <td>@(string.IsNullOrWhiteSpace(c.DiagnosticoPreoperatorio) ? "—" : c.DiagnosticoPreoperatorio)</td>
                     <td><select class="med-status" value="@c.Estado" @onchange="e => CambiarEstadoAsync(c, e)">@foreach (var s in Estados) { <option value="@s">@s</option> }</select></td>
+                    <td>
+                        <div class="surgery-photo-gallery surgery-photo-gallery-compact">
+                            @foreach (var foto in FotosDe(c.CirugiaId))
+                            {
+                                @if (foto.DataUri is not null)
+                                {
+                                    <button type="button" class="surgery-photo-thumb" title="Ampliar fotografía" @onclick="() => Ampliar(foto)">
+                                        <img src="@foto.DataUri" alt="@DescripcionFoto(foto)" />
+                                    </button>
+                                }
+                            }
+                            @if (FotosDe(c.CirugiaId).Count == 0) { <span class="surgery-no-photos">Sin fotos</span> }
+                        </div>
+                        <label class="photo-upload-control photo-upload-compact"><span>＋ Agregar</span><InputFile OnChange="e => SubirFotoAsync(c.CirugiaId, e)" accept="image/jpeg,image/png,image/webp" /></label>
+                    </td>
                     <td><button class="med-secondary" @onclick="() => Editar(c)">Editar</button></td>
                 </tr>
             }
             </tbody>
         </table></div>
         @if (_cirugias.Count == 0) { <p>No hay cirugías registradas.</p> }
+        else if (!CirugiasVisibles.Any()) { <p>No hay cirugías que coincidan con los filtros.</p> }
     </section>
 </div>
+
+@if (_fotoAmpliada is not null)
+{
+    <div class="surgery-photo-modal" role="dialog" aria-modal="true" aria-label="Fotografía de operación" @onclick="CerrarFoto">
+        <div class="surgery-photo-modal-content" @onclick:stopPropagation="true">
+            <button class="surgery-photo-modal-close" type="button" aria-label="Cerrar fotografía" @onclick="CerrarFoto">×</button>
+            <img src="@_fotoAmpliada.DataUri" alt="@DescripcionFoto(_fotoAmpliada)" />
+            <p>@DescripcionFoto(_fotoAmpliada) · @_fotoAmpliada.Fecha.ToString("dd/MM/yyyy")</p>
+        </div>
+    </div>
+}
 
 @code {
     private static readonly string[] Estados = ["Estudios preoperatorios", "Programada", "En proceso", "Postoperatorio / Recuperación", "Completada"];
     private List<CirugiaDto> _cirugias = new();
     private List<PersonaDto> _pacientes = new();
     private List<ProcedimientoDto> _procedimientos = new();
+    private readonly Dictionary<int, List<FotoDto>> _fotosPorCirugia = new();
     private CirugiaForm? _form;
-    private string _buscar = "";
+    private FotoDto? _fotoAmpliada;
+    private string _buscarPaciente = "";
+    private string _buscarDiagnostico = "";
+    private string _filtroEstado = "";
+    private string _orden = "paciente";
     private string? _error, _formError;
     private bool _saving;
-    private IEnumerable<CirugiaDto> CirugiasVisibles => _cirugias.Where(c => string.IsNullOrWhiteSpace(_buscar) || $"{c.Paciente?.Nombre} {c.Paciente?.Apellido} {c.Procedimiento?.Nombre} {c.DiagnosticoPreoperatorio}".Contains(_buscar, StringComparison.OrdinalIgnoreCase));
+
+    private IEnumerable<CirugiaDto> CirugiasVisibles
+    {
+        get
+        {
+            var query = _cirugias.Where(c =>
+                    (string.IsNullOrWhiteSpace(_buscarPaciente) || $"{c.Paciente?.Nombre} {c.Paciente?.Apellido}".Contains(_buscarPaciente.Trim(), StringComparison.OrdinalIgnoreCase)) &&
+                    (string.IsNullOrWhiteSpace(_filtroEstado) || string.Equals(c.Estado, _filtroEstado, StringComparison.OrdinalIgnoreCase)) &&
+                    (string.IsNullOrWhiteSpace(_buscarDiagnostico) || (c.DiagnosticoPreoperatorio ?? "").Contains(_buscarDiagnostico.Trim(), StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+
+            return _orden switch
+            {
+                "estado" => query.OrderBy(c => c.Estado, StringComparer.OrdinalIgnoreCase).ThenBy(c => c.FechaCirugia),
+                "diagnostico" => query.OrderBy(c => c.DiagnosticoPreoperatorio ?? "", StringComparer.OrdinalIgnoreCase).ThenBy(c => c.FechaCirugia),
+                _ => query.OrderBy(c => $"{c.Paciente?.Nombre} {c.Paciente?.Apellido}".Trim(), StringComparer.OrdinalIgnoreCase).ThenBy(c => c.FechaCirugia)
+            };
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
             var cirugiasTask = Http.GetFromJsonAsync<Envelope<List<CirugiaDto>>>("api/Cirugias");
-            var pacientesTask = Http.GetFromJsonAsync<Envelope<List<PersonaDto>>>("api/Pacientes");
+            var pacientesTask = Http.GetFromJsonAsync<Envelope<List<PersonaDto>>>("api/Pacientes/expediente/selector");
             var procedimientosTask = Http.GetFromJsonAsync<Envelope<List<ProcedimientoDto>>>("api/Procedimientos");
             await Task.WhenAll(cirugiasTask, pacientesTask, procedimientosTask);
             _cirugias = (await cirugiasTask)?.Value ?? new();
             _pacientes = (await pacientesTask)?.Value ?? new();
             _procedimientos = (await procedimientosTask)?.Value ?? new();
+            await CargarFotosAsync(_cirugias);
         }
         catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException) { _error = "No se pudo cargar la información clínica."; }
     }
@@ -77,6 +179,10 @@
     private void Nueva() { _formError = null; _form = new CirugiaForm { FechaCirugia = DateTime.Today, Estado = Estados[0] }; }
     private void Cancelar() { _form = null; _formError = null; }
     private void Editar(CirugiaDto c) => _form = new CirugiaForm { CirugiaId = c.CirugiaId, FechaCirugia = c.FechaCirugia, PacienteId = c.PacienteId, ProcedimientoId = c.ProcedimientoId, DiagnosticoPreoperatorio = c.DiagnosticoPreoperatorio, Estado = c.Estado, Observaciones = c.Observaciones };
+    private void Ampliar(FotoDto foto) => _fotoAmpliada = foto;
+    private void CerrarFoto() => _fotoAmpliada = null;
+    private List<FotoDto> FotosDe(int cirugiaId) => _fotosPorCirugia.TryGetValue(cirugiaId, out var fotos) ? fotos : new List<FotoDto>();
+    private static string DescripcionFoto(FotoDto foto) => string.IsNullOrWhiteSpace(foto.Descripcion) ? "Fotografía de operación" : foto.Descripcion;
 
     private async Task CambiarEstadoAsync(CirugiaDto c, ChangeEventArgs e)
     {
@@ -98,14 +204,64 @@
             _form = null;
             var envelope = await Http.GetFromJsonAsync<Envelope<List<CirugiaDto>>>("api/Cirugias");
             _cirugias = envelope?.Value ?? new();
+            await CargarFotosAsync(_cirugias);
         }
         catch (HttpRequestException) { _formError = "No se pudo conectar con la API."; }
         finally { _saving = false; }
     }
 
+    private async Task SubirFotoAsync(int cirugiaId, InputFileChangeEventArgs args)
+    {
+        try
+        {
+            await using var input = args.File.OpenReadStream(8 * 1024 * 1024);
+            using var buffer = new MemoryStream();
+            await input.CopyToAsync(buffer);
+            using var form = new MultipartFormDataContent();
+            var file = new ByteArrayContent(buffer.ToArray());
+            file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(args.File.ContentType);
+            form.Add(file, "archivo", args.File.Name);
+            form.Add(new StringContent("Fotografía de operación"), "descripcion");
+            using var response = await Http.PostAsync($"api/Fotografias/cirugia/{cirugiaId}/archivo", form);
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = "No se pudo subir la imagen. Usa JPEG, PNG o WebP y un tamaño máximo de 8 MB.";
+                return;
+            }
+
+            _error = null;
+            await CargarFotosCirugiaAsync(cirugiaId);
+        }
+        catch (IOException) { _error = "No se pudo leer el archivo seleccionado."; }
+        catch (InvalidOperationException) { _error = "La imagen supera el límite de 8 MB."; }
+        catch (HttpRequestException) { _error = "No se pudo conectar con la API para subir la imagen."; }
+    }
+
+    private async Task CargarFotosAsync(IEnumerable<CirugiaDto> cirugias)
+    {
+        _fotosPorCirugia.Clear();
+        foreach (var cirugia in cirugias)
+            await CargarFotosCirugiaAsync(cirugia.CirugiaId);
+    }
+
+    private async Task CargarFotosCirugiaAsync(int cirugiaId)
+    {
+        var envelope = await Http.GetFromJsonAsync<Envelope<List<FotoDto>>>($"api/Fotografias/cirugia/{cirugiaId}");
+        var fotos = envelope?.Value ?? new();
+        foreach (var foto in fotos)
+        {
+            using var response = await Http.GetAsync($"api/Fotografias/archivo/{foto.FotografiaId}");
+            if (!response.IsSuccessStatusCode) continue;
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+            foto.DataUri = $"data:{response.Content.Headers.ContentType?.MediaType ?? "image/jpeg"};base64,{Convert.ToBase64String(bytes)}";
+        }
+        _fotosPorCirugia[cirugiaId] = fotos;
+    }
+
     private sealed class Envelope<T> { public T? Value { get; set; } }
     private sealed class PersonaDto { public int PacienteId { get; set; } public string Nombre { get; set; } = ""; public string Apellido { get; set; } = ""; }
     private sealed class ProcedimientoDto { public int ProcedimientoId { get; set; } public string Nombre { get; set; } = ""; }
+    private sealed class FotoDto { public int FotografiaId { get; set; } public int CirugiaId { get; set; } public DateTime Fecha { get; set; } public string? Tipo { get; set; } public string? Descripcion { get; set; } public string? DataUri { get; set; } }
     private sealed class CirugiaDto { public int CirugiaId { get; set; } public DateTime FechaCirugia { get; set; } public int PacienteId { get; set; } public int ProcedimientoId { get; set; } public string? DiagnosticoPreoperatorio { get; set; } public string? Observaciones { get; set; } public string Estado { get; set; } = ""; public PersonaDto? Paciente { get; set; } public ProcedimientoDto? Procedimiento { get; set; } public CirugiaForm ToForm() => new() { CirugiaId = CirugiaId, FechaCirugia = FechaCirugia, PacienteId = PacienteId, ProcedimientoId = ProcedimientoId, DiagnosticoPreoperatorio = DiagnosticoPreoperatorio, Observaciones = Observaciones, Estado = Estado }; }
     private sealed class CirugiaForm { public int CirugiaId { get; set; } public DateTime FechaCirugia { get; set; } public int PacienteId { get; set; } public int ProcedimientoId { get; set; } public string? DiagnosticoPreoperatorio { get; set; } public string? Observaciones { get; set; } public string Estado { get; set; } = "Pendiente"; }
 }

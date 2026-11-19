@@ -11,6 +11,11 @@
 }
 
 /* PERFIL DEL CONSULTORIO */
+.profile-session {
+    position: relative;
+    width: 100%;
+}
+
 .right-profile {
     display: flex;
     align-items: center;
@@ -31,18 +36,44 @@
 }
 
 .profile-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    left: auto;
+    z-index: 20;
+    min-width: 160px;
     display: flex;
-    justify-content: flex-end;
-    margin-top: -16px;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 5px;
+    border: 1px solid #F0ECEE;
+    border-radius: 10px;
+    background: #FFFFFF;
+    box-shadow: 0 8px 24px rgba(54, 56, 58, 0.12);
 }
 
+.profile-dropdown a,
 .profile-dropdown button {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
     padding: 8px 12px;
-    border: 1px solid #F0ECEE;
-    border-radius: 8px;
-    background: #FFFFFF;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
     color: #9E6E79;
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    text-decoration: none;
     cursor: pointer;
+}
+
+.profile-dropdown a:hover,
+.profile-dropdown button:hover {
+    background: #F8E9ED;
+    color: #68414A;
 }
 
 .profile-avatar {
@@ -53,9 +84,18 @@
     height: 43px;
     flex-shrink: 0;
     border-radius: 50%;
+    overflow: hidden;
     background: #F8E9ED;
     color: #9E6E79;
     font-size: 17px;
+}
+
+.profile-avatar img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
 }
 
 .profile-info {
@@ -147,8 +187,10 @@
 
 .calendar-day {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 2px;
     width: 100%;
     aspect-ratio: 1;
     border: none;
@@ -158,6 +200,23 @@
     font-size: 10px;
     cursor: pointer;
     transition: background 0.2s ease;
+}
+
+.calendar-day-number {
+    line-height: 1;
+}
+
+.calendar-appointment-dot {
+    display: block;
+    width: 4px;
+    height: 4px;
+    flex: 0 0 4px;
+    border-radius: 50%;
+    background: #9E405E;
+}
+
+.calendar-appointment-dot.hidden {
+    visibility: hidden;
 }
 
     .calendar-day:hover {
@@ -173,6 +232,10 @@
         color: #FFFFFF;
         font-weight: 700;
         box-shadow: 0 4px 10px rgba(158, 110, 121, 0.2);
+    }
+
+    .calendar-day.selected .calendar-appointment-dot {
+        background: #FFFFFF;
     }
 
 /* ENCABEZADO DE LAS CITAS */

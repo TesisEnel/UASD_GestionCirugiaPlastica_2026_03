@@ -251,6 +251,55 @@
     grid-column: 1 / -1;
 }
 
+.quick-patient-form {
+    grid-column: 1 / -1;
+    padding: 16px;
+    border: 1px solid #E7DDE0;
+    border-radius: 12px;
+    background: #FCF8F9;
+}
+
+.quick-patient-form h4 {
+    margin: 0;
+    color: #68414A;
+    font-size: 15px;
+}
+
+.appointment-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.appointment-form-grid label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.appointment-form-grid label:last-child {
+    grid-column: 1 / -1;
+}
+
+.appointment-form-grid .quick-insurance-check {
+    display: flex;
+    align-items: center;
+    flex-direction: row;
+    gap: 9px;
+    align-self: center;
+}
+
+.appointment-form-grid .quick-insurance-toggle {
+    width: 17px;
+    height: 17px;
+    padding: 0;
+    accent-color: #9E6E79;
+}
+
+.quick-patient-form .btn-primary-custom {
+    justify-self: start;
+}
+
 /* ACCIONES */
 .appointment-actions {
     display: flex;
@@ -286,6 +335,14 @@
     }
 
     .appointment-form-full {
+        grid-column: auto;
+    }
+
+    .appointment-form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .appointment-form-grid label:last-child {
         grid-column: auto;
     }
 

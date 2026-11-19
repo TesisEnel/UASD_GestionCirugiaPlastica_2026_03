@@ -22,6 +22,9 @@ public partial class Usuario
     [StringLength(250)]
     public string? Email { get; set; }
 
+    [StringLength(500)]
+    public string? FotoUrl { get; set; }
+
     [StringLength(100)]
     public string? NombreUsuario { get; set; }
 

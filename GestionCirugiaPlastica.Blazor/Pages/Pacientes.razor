@@ -1,5 +1,5 @@
 @page "/pacientes"
-@attribute [Authorize(Roles = "Doctor,Secretaria")]
+@attribute [Authorize(Roles = "Doctora,Secretaria")]
 @using System.ComponentModel.DataAnnotations
 @using System.Net
 @using System.Text.Json
@@ -177,7 +177,7 @@
                                     <div class="pac-person">
                                         <div class="pac-avatar">@Iniciales(p)</div>
                                         <div>
-                                            <AuthorizeView Roles="Doctor">
+                                            <AuthorizeView Roles="Doctora">
                                                 <Authorized>
                                                     <button type="button" class="pac-person-link" @onclick="() => AbrirExpedienteAsync(p)">@p.Nombre @p.Apellido</button>
                                                 </Authorized>

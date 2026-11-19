@@ -6,9 +6,21 @@ namespace GestionCirugiaPlastica.Api.Controllers;
 
 [ApiController]
 [Route("api/Pacientes/expediente")]
-[Authorize(Roles = "Doctor")]
+[Authorize(Roles = "Doctora,AsistenteClinico")]
 public sealed class ExpedienteController(IDbContextFactory<GestionCirugiaPlasticaContext> contextFactory) : ControllerBase
 {
+    [HttpGet("selector")]
+    public async Task<IActionResult> SelectorClinico()
+    {
+        await using var db = await contextFactory.CreateDbContextAsync();
+        var pacientes = await db.Pacientes.AsNoTracking()
+            .OrderBy(p => p.Apellido)
+            .ThenBy(p => p.Nombre)
+            .Select(p => new { p.PacienteId, p.Nombre, p.Apellido, p.Cedula })
+            .ToListAsync();
+        return Ok(new { Value = pacientes });
+    }
+
     [HttpGet("{criterio}")]
     public async Task<IActionResult> Obtener(string criterio)
     {
@@ -51,6 +63,25 @@ public sealed class ExpedienteController(IDbContextFactory<GestionCirugiaPlastic
             .Select(f => new { f.FotografiaId, f.CirugiaId, f.Fecha, f.Tipo, f.Descripcion })
             .ToListAsync();
 
-        return Ok(new { paciente, seguro = new { tieneSeguro = paciente.TieneSeguro || polizas.Count > 0, polizas }, citas, operaciones, fotografias });
+        if (User.IsInRole("Doctora"))
+            return Ok(new { paciente, seguro = new { tieneSeguro = paciente.TieneSeguro || polizas.Count > 0, polizas }, citas, operaciones, fotografias });
+
+        // AsistenteClinico recibe solo los identificadores necesarios para reconocer al
+        // paciente y su información clínica; se omiten contacto, seguros y citas.
+        var pacienteClinico = new
+        {
+            paciente.PacienteId,
+            paciente.Nombre,
+            paciente.Apellido,
+            paciente.Cedula
+        };
+        return Ok(new
+        {
+            paciente = pacienteClinico,
+            seguro = new { tieneSeguro = false, polizas = Array.Empty<object>() },
+            citas = Array.Empty<object>(),
+            operaciones,
+            fotografias
+        });
     }
 }
