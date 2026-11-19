@@ -1,4 +1,4 @@
-﻿using GestionCirugiaPlastica.Application.Services;
+using GestionCirugiaPlastica.Application.Services;
 using GestionCirugiaPlastica.Infrastructure.Models;
 using Microsoft.AspNetCore.Mvc;
 
@@ -6,6 +6,7 @@ namespace GestionCirugiaPlastica.Api.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
+[Authorize(Roles = "Doctor")]
 public class ProcedimientosController(
     ProcedimientosServices procedimientosService
 ) : ControllerBase

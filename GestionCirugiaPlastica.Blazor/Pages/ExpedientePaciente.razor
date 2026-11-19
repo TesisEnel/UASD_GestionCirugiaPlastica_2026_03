@@ -1,0 +1,242 @@
+@page "/pacientes/expediente/{Criterio}"
+@attribute [Authorize(Roles = "Doctor")]
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@using System.Text.Json
+@using Microsoft.AspNetCore.Components.Forms
+
+<PageTitle>Expediente del paciente | Tanger Clinic</PageTitle>
+
+<div class="expediente-page">
+    <div class="expediente-header">
+        <div><a href="/pacientes">← Pacientes</a><h1>Expediente clínico</h1></div>
+        <input class="expediente-search" placeholder="Buscar por nombre o cédula" @bind="_busqueda" @bind:event="oninput" @onkeydown="BuscarConEnter" />
+        <button class="expediente-action" @onclick="BuscarAsync">Buscar</button>
+    </div>
+
+    @if (_loading) { <p>Cargando expediente...</p> }
+    else if (_expediente is null) { <p class="expediente-error">@_error</p> }
+    else
+    {
+        <section class="expediente-persona">
+            <div><span>Paciente</span><h2>@_expediente.Paciente.Nombre @_expediente.Paciente.Apellido</h2></div>
+            <div><span>Cédula</span><strong>@(_expediente.Paciente.Cedula ?? "—")</strong></div>
+            <div><span>Seguro</span><strong>@(_expediente.Seguro.TieneSeguro ? "Registrado" : "Sin seguro registrado")</strong></div>
+        </section>
+
+        <div class="expediente-tabs" role="tablist">
+            <button class="@TabClass("personal")" @onclick='() => _tab = "personal"'>Datos personales y seguro</button>
+            <button class="@TabClass("operaciones")" @onclick='() => _tab = "operaciones"'>Procedimientos y operaciones</button>
+            <button class="@TabClass("citas")" @onclick='() => _tab = "citas"'>Historial de citas</button>
+        </div>
+
+        @if (_tab == "personal")
+        {
+            <EditForm Model="_expediente.Paciente" OnValidSubmit="GuardarPacienteAsync" class="expediente-card">
+                <DataAnnotationsValidator />
+                <div class="expediente-grid">
+                    <label>Nombre<InputText @bind-Value="_expediente.Paciente.Nombre" /></label>
+                    <label>Apellido<InputText @bind-Value="_expediente.Paciente.Apellido" /></label>
+                    <label>Cédula<InputText @bind-Value="_expediente.Paciente.Cedula" /></label>
+                    <label>Teléfono<InputText @bind-Value="_expediente.Paciente.Telefono" /></label>
+                    <label>Correo<InputText @bind-Value="_expediente.Paciente.Email" /></label>
+                    <label>Fecha de nacimiento<InputDate TValue="DateOnly?" @bind-Value="_expediente.Paciente.FechaNacimiento" /></label>
+                    <label>Sexo<InputText @bind-Value="_expediente.Paciente.Sexo" /></label>
+                    <label>Dirección<InputText @bind-Value="_expediente.Paciente.Direccion" /></label>
+                    <label class="expediente-check"><InputCheckbox @bind-Value="_expediente.Paciente.TieneSeguro" /> Tiene seguro médico</label>
+                </div>
+                @if (_expediente.Paciente.TieneSeguro)
+                {
+                    <h3>Seguro del paciente</h3>
+                    @if (_expediente.Seguro.Polizas.Count > 0)
+                    {
+                        @foreach (var poliza in _expediente.Seguro.Polizas)
+                        {
+                            <div class="expediente-grid">
+                                <label>Aseguradora<strong>@poliza.Aseguradora</strong></label>
+                                <label>Número de póliza<InputText @bind-Value="poliza.NumeroPoliza" /></label>
+                                <button type="button" class="expediente-action" @onclick="() => GuardarPolizaAsync(poliza)">Guardar póliza</button>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <p>El paciente indicó que tiene seguro, pero todavía no hay una póliza registrada.</p>
+                    }
+                }
+                @if (_status is not null) { <p>@_status</p> }
+                <button class="expediente-action" type="submit">Guardar datos personales</button>
+            </EditForm>
+        }
+        else if (_tab == "operaciones")
+        {
+            <section class="expediente-card">
+                <h2>Operaciones y procedimientos realizados</h2>
+                @if (_expediente.Operaciones.Count == 0) { <p>No hay operaciones registradas.</p> }
+                @foreach (var op in _expediente.Operaciones)
+                {
+                    <div class="operacion-row">
+                        <div><strong>@op.Procedimiento</strong><span>@op.FechaCirugia.ToString("dd/MM/yyyy") · @op.Estado</span><span>Diagnóstico: @(op.DiagnosticoPreoperatorio ?? "—")</span><span>Notas: @(op.Observaciones ?? "—")</span></div>
+                        <button class="expediente-secondary" @onclick="() => EditarOperacion(op)">Editar</button>
+                    </div>
+                    <div class="expediente-gallery">
+                        @foreach (var foto in _expediente.Fotografias.Where(f => f.CirugiaId == op.CirugiaId))
+                        {
+                            <figure>
+                                @if (!string.IsNullOrWhiteSpace(foto.DataUri)) { <a href="@foto.DataUri" target="_blank" rel="noopener"><img src="@foto.DataUri" alt="@foto.Descripcion" /></a> }
+                                <figcaption>@(foto.Descripcion ?? "Imagen de operación") · @foto.Fecha.ToString("dd/MM/yyyy")</figcaption>
+                            </figure>
+                        }
+                    </div>
+                    <div class="expediente-upload">
+                        <label>Agregar imagen a esta operación</label>
+                        <InputFile accept="image/jpeg,image/png,image/webp" OnChange="@(e => SubirImagenAsync(op.CirugiaId, e))" />
+                    </div>
+                }
+                <h3>@(_cirugiaForm.CirugiaId == 0 ? "Agregar operación" : "Editar operación")</h3>
+                <EditForm Model="_cirugiaForm" OnValidSubmit="GuardarOperacionAsync">
+                    <div class="expediente-grid">
+                        <label>Procedimiento
+                            <InputSelect @bind-Value="_cirugiaForm.ProcedimientoId">
+                                <option value="0">Selecciona un procedimiento</option>
+                                @foreach (var p in _procedimientos) { <option value="@p.ProcedimientoId">@p.Nombre</option> }
+                            </InputSelect>
+                        </label>
+                        <label>Fecha<InputDate @bind-Value="_cirugiaForm.FechaCirugia" /></label>
+                        <label>Estado<InputText @bind-Value="_cirugiaForm.Estado" /></label>
+                        <label>Diagnóstico preoperatorio<InputTextArea @bind-Value="_cirugiaForm.DiagnosticoPreoperatorio" /></label>
+                        <label>Notas / observaciones<InputTextArea @bind-Value="_cirugiaForm.Observaciones" /></label>
+                    </div>
+                    <button class="expediente-action" type="submit">Guardar operación</button>
+                    @if (_status is not null) { <p>@_status</p> }
+                </EditForm>
+            </section>
+        }
+        else
+        {
+            <section class="expediente-card">
+                <h2>Citas anteriores y próximas</h2>
+                @if (_expediente.Citas.Count == 0) { <p>No hay citas registradas.</p> }
+                <div class="expediente-table-wrap"><table class="expediente-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Estado</th><th>Pago</th><th>Observaciones</th></tr></thead><tbody>
+                @foreach (var cita in _expediente.Citas) { <tr><td>@cita.Fecha.ToString("dd/MM/yyyy HH:mm")</td><td>@cita.TipoCita</td><td>@cita.Estado</td><td>@cita.EstadoPago</td><td>@cita.Observaciones</td></tr> }
+                </tbody></table></div>
+            </section>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public string Criterio { get; set; } = "";
+    private ExpedienteDto? _expediente;
+    private bool _loading = true;
+    private string? _error;
+    private string? _status;
+    private string _tab = "personal";
+    private string _busqueda = "";
+    private CirugiaForm _cirugiaForm = new();
+    private List<ProcedimientoDto> _procedimientos = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        try
+        {
+            await CargarExpedienteAsync();
+            _error = null;
+            _busqueda = Criterio;
+            await CargarProcedimientosAsync();
+        }
+        catch (HttpRequestException) { _error = "No se pudo cargar el expediente."; }
+        catch (System.Text.Json.JsonException) { _error = "La respuesta del servidor no tiene el formato esperado."; }
+        finally { _loading = false; }
+    }
+
+    private async Task BuscarConEnter(KeyboardEventArgs e) { if (e.Key == "Enter") await BuscarAsync(); }
+    private Task BuscarAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(_busqueda))
+            Navigation.NavigateTo($"/pacientes/expediente/{Uri.EscapeDataString(_busqueda.Trim())}");
+        return Task.CompletedTask;
+    }
+    private string TabClass(string name) => _tab == name ? "expediente-tab active" : "expediente-tab";
+
+    private async Task CargarExpedienteAsync()
+    {
+        _expediente = await Http.GetFromJsonAsync<ExpedienteDto>($"api/Pacientes/expediente/{Uri.EscapeDataString(Criterio)}");
+        if (_expediente is null) return;
+        foreach (var foto in _expediente.Fotografias)
+        {
+            using var response = await Http.GetAsync($"api/Fotografias/archivo/{foto.FotografiaId}");
+            if (!response.IsSuccessStatusCode) continue;
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+            foto.DataUri = $"data:{response.Content.Headers.ContentType?.MediaType ?? "image/jpeg"};base64,{Convert.ToBase64String(bytes)}";
+        }
+    }
+
+    private async Task SubirImagenAsync(int cirugiaId, InputFileChangeEventArgs args)
+    {
+        try
+        {
+            await using var input = args.File.OpenReadStream(8 * 1024 * 1024);
+            using var buffer = new MemoryStream();
+            await input.CopyToAsync(buffer);
+            using var form = new MultipartFormDataContent();
+            var file = new ByteArrayContent(buffer.ToArray());
+            file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(args.File.ContentType);
+            form.Add(file, "archivo", args.File.Name);
+            form.Add(new StringContent("Imagen clínica"), "descripcion");
+            using var response = await Http.PostAsync($"api/Fotografias/cirugia/{cirugiaId}/archivo", form);
+            _status = response.IsSuccessStatusCode ? "Imagen subida correctamente." : "No se pudo subir la imagen. Verifica que sea JPEG, PNG o WebP y no supere 8 MB.";
+            if (response.IsSuccessStatusCode) await CargarExpedienteAsync();
+        }
+        catch (IOException) { _status = "No se pudo leer el archivo seleccionado."; }
+        catch (InvalidOperationException) { _status = "La imagen supera el límite de 8 MB."; }
+    }
+
+    private async Task CargarProcedimientosAsync()
+    {
+        using var response = await Http.GetAsync("api/Procedimientos");
+        using var json = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        if (json.RootElement.TryGetProperty("value", out var value))
+            _procedimientos = System.Text.Json.JsonSerializer.Deserialize<List<ProcedimientoDto>>(value.GetRawText(), new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)) ?? new();
+    }
+
+    private async Task GuardarPacienteAsync()
+    {
+        using var response = await Http.PutAsJsonAsync($"api/Pacientes/{_expediente!.Paciente.PacienteId}", _expediente.Paciente);
+        _status = response.IsSuccessStatusCode ? "Datos del paciente guardados." : "No se pudieron guardar los datos.";
+    }
+
+    private async Task GuardarPolizaAsync(PolizaDto poliza)
+    {
+        var body = new { poliza.PacienteSeguroId, PacienteId = _expediente!.Paciente.PacienteId, poliza.SeguroId, poliza.NumeroPoliza, poliza.Titular, poliza.FechaVencimiento, poliza.Observaciones };
+        using var response = await Http.PutAsJsonAsync("api/Seguros/polizas", body);
+        _status = response.IsSuccessStatusCode ? "Datos del seguro guardados." : "No se pudo guardar el seguro.";
+    }
+
+    private void EditarOperacion(OperacionDto op) => _cirugiaForm = new CirugiaForm { CirugiaId = op.CirugiaId, FechaCirugia = op.FechaCirugia, PacienteId = _expediente!.Paciente.PacienteId, ProcedimientoId = op.ProcedimientoId, DiagnosticoPreoperatorio = op.DiagnosticoPreoperatorio, Estado = op.Estado, Observaciones = op.Observaciones };
+
+    private async Task GuardarOperacionAsync()
+    {
+        _cirugiaForm.PacienteId = _expediente!.Paciente.PacienteId;
+        using var response = _cirugiaForm.CirugiaId == 0
+            ? await Http.PostAsJsonAsync("api/Cirugias", _cirugiaForm)
+            : await Http.PutAsJsonAsync($"api/Cirugias/{_cirugiaForm.CirugiaId}", _cirugiaForm);
+        _status = response.IsSuccessStatusCode ? "Operación guardada." : "No se pudo guardar la operación.";
+        if (response.IsSuccessStatusCode)
+        {
+            _cirugiaForm = new CirugiaForm { PacienteId = _expediente!.Paciente.PacienteId };
+            await CargarExpedienteAsync();
+        }
+    }
+
+    private sealed class ExpedienteDto { public PacienteDto Paciente { get; set; } = new(); public SeguroDto Seguro { get; set; } = new(); public List<CitaDto> Citas { get; set; } = new(); public List<OperacionDto> Operaciones { get; set; } = new(); public List<FotoDto> Fotografias { get; set; } = new(); }
+    private sealed class PacienteDto { public int PacienteId { get; set; } public string Nombre { get; set; } = ""; public string Apellido { get; set; } = ""; public string? Cedula { get; set; } public DateOnly? FechaNacimiento { get; set; } public string? Sexo { get; set; } public string? Telefono { get; set; } public string? Email { get; set; } public string? Direccion { get; set; } public bool TieneSeguro { get; set; } }
+    private sealed class SeguroDto { public bool TieneSeguro { get; set; } public List<PolizaDto> Polizas { get; set; } = new(); }
+    private sealed class PolizaDto { public int PacienteSeguroId { get; set; } public int SeguroId { get; set; } public string Aseguradora { get; set; } = ""; public string? NumeroPoliza { get; set; } public string? Titular { get; set; } public DateOnly? FechaVencimiento { get; set; } public string? Observaciones { get; set; } }
+    private sealed class CitaDto { public DateTime Fecha { get; set; } public string? TipoCita { get; set; } public string Estado { get; set; } = ""; public string EstadoPago { get; set; } = ""; public string? Observaciones { get; set; } }
+    private sealed class OperacionDto { public int CirugiaId { get; set; } public DateTime FechaCirugia { get; set; } public int ProcedimientoId { get; set; } public string Procedimiento { get; set; } = ""; public string? DiagnosticoPreoperatorio { get; set; } public string Estado { get; set; } = ""; public string? Observaciones { get; set; } }
+    private sealed class FotoDto { public int FotografiaId { get; set; } public int CirugiaId { get; set; } public DateTime Fecha { get; set; } public string? Tipo { get; set; } public string? Descripcion { get; set; } public string? DataUri { get; set; } }
+    private sealed class ProcedimientoDto { public int ProcedimientoId { get; set; } public string Nombre { get; set; } = ""; }
+    private sealed class CirugiaForm { public int CirugiaId { get; set; } public DateTime FechaCirugia { get; set; } = DateTime.Today; public int PacienteId { get; set; } public int ProcedimientoId { get; set; } public string? DiagnosticoPreoperatorio { get; set; } public string Estado { get; set; } = "Pendiente"; public string? Observaciones { get; set; } }
+}

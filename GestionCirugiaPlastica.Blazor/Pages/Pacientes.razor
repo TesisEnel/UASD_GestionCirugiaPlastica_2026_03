@@ -1,8 +1,10 @@
-﻿@page "/pacientes"
+@page "/pacientes"
+@attribute [Authorize(Roles = "Doctor,Secretaria")]
 @using System.ComponentModel.DataAnnotations
 @using System.Net
 @using System.Text.Json
 @inject HttpClient Http
+@inject NavigationManager Navigation
 
 <PageTitle>Pacientes | Tanger Clinic</PageTitle>
 
@@ -30,6 +32,15 @@
             <button type="button" class="pac-alert-close" title="Cerrar" @onclick="CerrarMensaje">
                 <i class="fa-solid fa-xmark"></i>
             </button>
+        </div>
+    }
+
+    @if (_pacienteSinHistorial is not null)
+    {
+        <div class="pac-alert pac-alert-ok" role="status">
+            <span>@_pacienteSinHistorial.Nombre @_pacienteSinHistorial.Apellido todavía no tiene citas ni operaciones registradas.</span>
+            <button type="button" class="pac-btn pac-btn-primary" @onclick="AbrirExpedienteInicial">Abrir expediente e iniciar registro</button>
+            <button type="button" class="pac-alert-close" title="Cerrar" @onclick="() => _pacienteSinHistorial = null"><i class="fa-solid fa-xmark"></i></button>
         </div>
     }
 
@@ -166,7 +177,12 @@
                                     <div class="pac-person">
                                         <div class="pac-avatar">@Iniciales(p)</div>
                                         <div>
-                                            <strong>@p.Nombre @p.Apellido</strong>
+                                            <AuthorizeView Roles="Doctor">
+                                                <Authorized>
+                                                    <button type="button" class="pac-person-link" @onclick="() => AbrirExpedienteAsync(p)">@p.Nombre @p.Apellido</button>
+                                                </Authorized>
+                                                <NotAuthorized><strong>@p.Nombre @p.Apellido</strong></NotAuthorized>
+                                            </AuthorizeView>
                                             <span>ID #@p.PacienteId</span>
                                         </div>
                                     </div>
@@ -290,6 +306,35 @@
                             <InputText id="pac-direccion" @bind-Value="_form.Direccion" placeholder="Calle, sector, ciudad" />
                             <ValidationMessage For="() => _form.Direccion" />
                         </div>
+
+                        <div class="pac-field pac-field-full pac-insurance-toggle">
+                            <label for="pac-tiene-seguro">¿Tiene seguro médico?</label>
+                            <InputCheckbox id="pac-tiene-seguro" class="form-check-input" @bind-Value="_form.TieneSeguro" />
+                        </div>
+
+                        @if (_form.TieneSeguro)
+                        {
+                            <div class="pac-insurance-fields pac-field-full" aria-live="polite">
+                                <h4>Seguro del Paciente</h4>
+                                <p>Completa los datos de la póliza del paciente.</p>
+                                <div class="pac-form-grid">
+                                    <div class="pac-field">
+                                        <label for="pac-seguro">Aseguradora</label>
+                                        <InputSelect id="pac-seguro" @bind-Value="_form.SeguroId">
+                                            <option value="">Selecciona una aseguradora</option>
+                                            @foreach (var seguro in _segurosDisponibles)
+                                            {
+                                                <option value="@seguro.SeguroId">@seguro.Nombre</option>
+                                            }
+                                        </InputSelect>
+                                    </div>
+                                    <div class="pac-field">
+                                        <label for="pac-poliza">Número de póliza</label>
+                                        <InputText id="pac-poliza" @bind-Value="_form.NumeroPoliza" placeholder="Número de póliza" />
+                                    </div>
+                                </div>
+                            </div>
+                        }
                     </div>
                 </div>
 
@@ -445,6 +490,7 @@
     // Detalle y eliminación
     private PacienteModel? _detalle;
     private PacienteModel? _aEliminar;
+    private PacienteModel? _pacienteSinHistorial;
     private bool _eliminando;
 
     // ───────────────────────── Propiedades calculadas ─────────────────────────
@@ -514,7 +560,25 @@
         Math.Max(1, (int)Math.Ceiling(_pacientes.Count / (double)PorPagina));
 
     // ───────────────────────── Ciclo de vida ─────────────────────────
-    protected override async Task OnInitializedAsync() => await CargarAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+        await CargarSegurosAsync();
+    }
+
+    private List<SeguroOpcion> _segurosDisponibles = new();
+
+    private async Task CargarSegurosAsync()
+    {
+        try
+        {
+            using var response = await Http.GetAsync("api/Seguros/activos");
+            var result = await LeerAsync(response);
+            if (result.Exito && result.Valor is { ValueKind: JsonValueKind.Array } value)
+                _segurosDisponibles = value.Deserialize<List<SeguroOpcion>>(JsonOpts) ?? new();
+        }
+        catch (HttpRequestException) { }
+    }
 
     // ───────────────────────── GET api/Pacientes  y  GET api/Pacientes/buscar ─────────────────────────
     private async Task CargarAsync()
@@ -639,7 +703,26 @@
                 return null;
             }
 
-            return resultado.Valor.Value.Deserialize<PacienteModel>(JsonOpts);
+            var paciente = resultado.Valor.Value.Deserialize<PacienteModel>(JsonOpts);
+            if (paciente is null) return null;
+
+            using var segurosRespuesta = await Http.GetAsync($"api/PacienteSeguro/paciente/{id}");
+            var segurosResultado = await LeerAsync(segurosRespuesta);
+            if (segurosResultado.Exito && segurosResultado.Valor is { ValueKind: JsonValueKind.Array } segurosJson)
+            {
+                var seguros = segurosJson.Deserialize<List<PacienteSeguroModel>>(JsonOpts) ?? new();
+                var seguroActual = seguros.FirstOrDefault();
+                if (seguroActual is not null)
+                {
+                    paciente.TieneSeguro = true;
+                    paciente.PacienteSeguroId = seguroActual.PacienteSeguroId;
+                    paciente.SeguroId = seguroActual.SeguroId;
+                    paciente.SeguroNombre = seguroActual.Seguro?.Nombre;
+                    paciente.NumeroPoliza = seguroActual.NumeroPoliza;
+                }
+            }
+
+            return paciente;
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException)
         {
@@ -649,6 +732,33 @@
     }
 
     private async Task VerDetalleAsync(int id) => _detalle = await ObtenerPorIdAsync(id);
+
+    private async Task AbrirExpedienteAsync(PacienteModel paciente)
+    {
+        try
+        {
+            var expediente = await Http.GetFromJsonAsync<ExpedienteResumen>($"api/Pacientes/expediente/{paciente.PacienteId}");
+            if (expediente is null) { MostrarMensaje("No se pudo cargar el expediente.", true); return; }
+            if (expediente.Citas.Count > 0 || expediente.Operaciones.Count > 0)
+                Navigation.NavigateTo($"/pacientes/expediente/{paciente.PacienteId}");
+            else
+                _pacienteSinHistorial = paciente;
+        }
+        catch (HttpRequestException)
+        {
+            MostrarMensaje("No se pudo conectar con el expediente del paciente.", true);
+        }
+        catch (JsonException)
+        {
+            MostrarMensaje("La respuesta del expediente no tiene el formato esperado.", true);
+        }
+    }
+
+    private void AbrirExpedienteInicial()
+    {
+        if (_pacienteSinHistorial is null) return;
+        Navigation.NavigateTo($"/pacientes/expediente/{_pacienteSinHistorial.PacienteId}");
+    }
 
     private void CerrarDetalle() => _detalle = null;
 
@@ -662,7 +772,7 @@
         _mostrarForm = true;
     }
 
-    // ───────────────────────── POST api/Pacientes (crear y editar) ─────────────────────────
+    // ───────────────────────── POST api/Pacientes y PUT api/Pacientes/{id} ─────────────────────────
     private void AbrirNuevo()
     {
         _form = new PacienteModel { FechaRegistro = DateTime.Now };
@@ -704,7 +814,9 @@
             bool esNuevo = _form.PacienteId == 0;
             var paciente = _form.Normalizar();
 
-            using var respuesta = await Http.PostAsJsonAsync(Ruta, paciente, JsonOpts);
+            using var respuesta = esNuevo
+                ? await Http.PostAsJsonAsync(Ruta, paciente, JsonOpts)
+                : await Http.PutAsJsonAsync($"{Ruta}/{paciente.PacienteId}", paciente, JsonOpts);
             var resultado = await LeerAsync(respuesta);
 
             bool noGuardo = resultado.Valor is { ValueKind: JsonValueKind.False };
@@ -715,6 +827,47 @@
                     ? resultado.Mensaje
                     : "No se pudo guardar el paciente.";
                 return;
+            }
+
+            if (!esNuevo && _form.TieneSeguro)
+            {
+                if (_form.SeguroId is not int seguroId || seguroId <= 0)
+                {
+                    _errorFormulario = "Selecciona una aseguradora para guardar los datos del seguro.";
+                    return;
+                }
+
+                var poliza = new
+                {
+                    PacienteSeguroId = _form.PacienteSeguroId ?? 0,
+                    PacienteId = _form.PacienteId,
+                    SeguroId = seguroId,
+                    NumeroPoliza = _form.NumeroPoliza,
+                    Titular = (string?)null,
+                    FechaVencimiento = (DateOnly?)null,
+                    Observaciones = (string?)null
+                };
+                using var seguroResponse = _form.PacienteSeguroId is null
+                    ? await Http.PostAsJsonAsync("api/Seguros/polizas", poliza, JsonOpts)
+                    : await Http.PutAsJsonAsync("api/Seguros/polizas", poliza, JsonOpts);
+                var seguroResult = await LeerAsync(seguroResponse);
+                if (!seguroResult.Exito)
+                {
+                    _errorFormulario = string.IsNullOrWhiteSpace(seguroResult.Mensaje)
+                        ? "No se pudieron guardar los datos del seguro."
+                        : seguroResult.Mensaje;
+                    return;
+                }
+            }
+            else if (!esNuevo && !_form.TieneSeguro && _form.PacienteSeguroId is int pacienteSeguroId)
+            {
+                using var seguroResponse = await Http.DeleteAsync($"api/PacienteSeguro/{pacienteSeguroId}");
+                var seguroResult = await LeerAsync(seguroResponse);
+                if (!seguroResult.Exito)
+                {
+                    _errorFormulario = "No se pudo eliminar la póliza del paciente.";
+                    return;
+                }
             }
 
             _mostrarForm = false;
@@ -932,6 +1085,16 @@
 
         public DateOnly? FechaNacimiento { get; set; }
 
+        public bool TieneSeguro { get; set; }
+
+        public int? PacienteSeguroId { get; set; }
+
+        public int? SeguroId { get; set; }
+
+        public string? SeguroNombre { get; set; }
+
+        public string? NumeroPoliza { get; set; }
+
         [StringLength(250, ErrorMessage = "Máximo 250 caracteres.")]
         public string? Telefono { get; set; }
 
@@ -965,4 +1128,31 @@
         private static string? Limpiar(string? valor) =>
             string.IsNullOrWhiteSpace(valor) ? null : valor.Trim();
     }
+
+    public class PacienteSeguroModel
+    {
+        public int PacienteSeguroId { get; set; }
+        public int SeguroId { get; set; }
+        public string? NumeroPoliza { get; set; }
+        public SeguroModel? Seguro { get; set; }
+    }
+
+    public class SeguroModel
+    {
+        public int SeguroId { get; set; }
+        public string? Nombre { get; set; }
+    }
+
+    public class SeguroOpcion
+    {
+        public int SeguroId { get; set; }
+        public string Nombre { get; set; } = "";
+    }
+
+    private sealed class ExpedienteResumen
+    {
+        public List<object> Citas { get; set; } = new();
+        public List<object> Operaciones { get; set; } = new();
+    }
 }
+

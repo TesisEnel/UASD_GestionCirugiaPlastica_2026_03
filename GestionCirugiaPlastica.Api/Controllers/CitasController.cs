@@ -1,10 +1,11 @@
-﻿using GestionCirugiaPlastica.Application.Services;
+using GestionCirugiaPlastica.Application.Services;
 using GestionCirugiaPlastica.Infrastructure.Models;
 using Microsoft.AspNetCore.Mvc;
 
 namespace GestionCirugiaPlastica.API.Controllers;
 
 [ApiController]
+[Authorize(Roles = "Doctor,Secretaria")]
 [Route("api/[controller]")]
 public class CitasController : ControllerBase
 {
@@ -102,3 +103,4 @@ public class CitasController : ControllerBase
         return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 }
+

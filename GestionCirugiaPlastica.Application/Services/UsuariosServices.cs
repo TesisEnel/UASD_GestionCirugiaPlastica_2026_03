@@ -78,32 +78,37 @@ public class UsuariosServices(
         if (usuario == null ||
             string.IsNullOrWhiteSpace(usuario.Nombre) ||
             string.IsNullOrWhiteSpace(usuario.Apellido) ||
-            string.IsNullOrWhiteSpace(usuario.Email))
+            (string.IsNullOrWhiteSpace(usuario.Email) && string.IsNullOrWhiteSpace(usuario.NombreUsuario) && usuario.PacienteId is null))
         {
             return Result.Failure(DatosRequeridos);
         }
 
         if (usuario.Nombre.Trim().Length > 250 ||
             usuario.Apellido.Trim().Length > 250 ||
-            usuario.Email.Trim().Length > 250)
+            usuario.Email?.Trim().Length is > 250 ||
+            usuario.NombreUsuario?.Trim().Length is > 100)
         {
             return Result.Failure(TextoMuyLargo);
         }
 
-        string email = usuario.Email.Trim().ToLowerInvariant();
+        string? email = string.IsNullOrWhiteSpace(usuario.Email) ? null : usuario.Email.Trim().ToLowerInvariant();
+        string? nombreUsuario = string.IsNullOrWhiteSpace(usuario.NombreUsuario) ? null : usuario.NombreUsuario.Trim();
 
-        if (!EmailValido(email))
+        if (email is not null && !EmailValido(email))
             return Result.Failure(EmailInvalido);
 
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
-        bool emailExiste = await contexto.Usuarios
-            .AnyAsync(u =>
-                u.Email.ToLower() == email &&
-                u.UsuarioId != usuario.UsuarioId);
+        bool emailExiste = email is not null && await contexto.Usuarios
+            .AnyAsync(u => u.Email != null && u.Email.ToLower() == email && u.UsuarioId != usuario.UsuarioId);
 
         if (emailExiste)
             return Result.Failure(EmailDuplicado);
+
+        bool nombreUsuarioExiste = nombreUsuario is not null && await contexto.Usuarios
+            .AnyAsync(u => u.NombreUsuario != null && u.NombreUsuario.ToLower() == nombreUsuario.ToLower() && u.UsuarioId != usuario.UsuarioId);
+        if (nombreUsuarioExiste)
+            return Result.Failure(new Error("Usuario.NombreUsuarioDuplicado", "Ya existe un usuario con ese nombre de usuario."));
 
         bool rolExiste = await contexto.Roles
             .AnyAsync(r => r.RolId == usuario.RolId);
@@ -129,6 +134,8 @@ public class UsuariosServices(
                     Nombre = usuario.Nombre.Trim(),
                     Apellido = usuario.Apellido.Trim(),
                     Email = email,
+                    NombreUsuario = nombreUsuario,
+                    PacienteId = usuario.PacienteId,
                     RolId = usuario.RolId,
                     Activo = true
                 };
@@ -154,6 +161,8 @@ public class UsuariosServices(
                 existente.Nombre = usuario.Nombre.Trim();
                 existente.Apellido = usuario.Apellido.Trim();
                 existente.Email = email;
+                existente.NombreUsuario = nombreUsuario;
+                existente.PacienteId = usuario.PacienteId;
 
                 // La contraseña se modifica únicamente mediante CambiarPassword.
                 // El estado Activo, mediante Activar o Desactivar.
@@ -273,7 +282,7 @@ public class UsuariosServices(
         var usuario = await contexto.Usuarios
             .AsNoTracking()
             .Include(u => u.Rol)
-            .Where(u => u.Email.ToLower() == email)
+            .Where(u => u.Email != null && u.Email.ToLower() == email)
             .Select(u => new Usuario
             {
                 UsuarioId = u.UsuarioId,
@@ -504,7 +513,7 @@ public class UsuariosServices(
 
         bool existe = await contexto.Usuarios
             .AnyAsync(u =>
-                u.Email.ToLower() == email &&
+                u.Email != null && u.Email.ToLower() == email &&
                 u.UsuarioId != usuarioIdExcluir);
 
         return Result<bool>.Success(existe);

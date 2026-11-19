@@ -17,6 +17,32 @@
     gap: 12px;
     padding-bottom: 22px;
     border-bottom: 1px solid #F2EEF0;
+    cursor: pointer;
+}
+
+.profile-card-button {
+    width: 100%;
+    border: 0;
+    border-bottom: 1px solid #F2EEF0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+}
+
+.profile-dropdown {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: -16px;
+}
+
+.profile-dropdown button {
+    padding: 8px 12px;
+    border: 1px solid #F0ECEE;
+    border-radius: 8px;
+    background: #FFFFFF;
+    color: #9E6E79;
+    cursor: pointer;
 }
 
 .profile-avatar {

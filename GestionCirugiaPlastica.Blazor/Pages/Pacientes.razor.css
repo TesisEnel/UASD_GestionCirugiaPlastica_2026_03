@@ -101,18 +101,19 @@
     justify-content: center;
     width: 34px;
     height: 34px;
-    border: none;
+    border: 1px solid #D8C9CD;
     border-radius: 9px;
-    background: transparent;
-    color: var(--c-taupe);
+    background: #FFFFFF;
+    color: #68414A;
     font-size: 14px;
     cursor: pointer;
     transition: background 0.2s ease, color 0.2s ease;
 }
 
     .pac-icon-btn:hover:not(:disabled) {
-        background: var(--c-malva-claro);
-        color: var(--c-malva);
+        background: #F3E4E8;
+        border-color: #855965;
+        color: #5A303B;
     }
 
     .pac-icon-btn:disabled {
@@ -367,6 +368,25 @@
     gap: 12px;
 }
 
+.pac-person-link {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #68414A;
+    font: inherit;
+    font-weight: 700;
+    text-align: left;
+    text-decoration: underline;
+    text-decoration-color: #D8C9CD;
+    text-underline-offset: 3px;
+    cursor: pointer;
+}
+
+.pac-person-link:hover, .pac-person-link:focus-visible {
+    color: #4F2934;
+    text-decoration-color: #68414A;
+}
+
     .pac-person strong {
         display: block;
         font-size: 13px;
@@ -586,6 +606,42 @@
 
 .pac-field-full {
     grid-column: 1 / -1;
+}
+
+.pac-insurance-toggle {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+}
+
+.pac-insurance-toggle label {
+    margin: 0;
+}
+
+.pac-insurance-toggle input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--c-malva);
+}
+
+.pac-insurance-fields {
+    padding: 16px;
+    border: 1px solid var(--c-borde);
+    border-radius: 12px;
+    background: #FCF8F9;
+}
+
+.pac-insurance-fields h4 {
+    margin: 0 0 4px;
+    color: var(--c-carbon);
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.pac-insurance-fields p {
+    margin: 0 0 14px;
+    color: var(--c-taupe);
+    font-size: 12px;
 }
 
 .pac-field label {

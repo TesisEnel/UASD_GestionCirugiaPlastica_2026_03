@@ -2,11 +2,9 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using Microsoft.EntityFrameworkCore;
 
 namespace GestionCirugiaPlastica.Infrastructure.Models;
 
-[Index("Email", Name = "UQ__Usuarios__A9D10534CD4693E6", IsUnique = true)]
 public partial class Usuario
 {
     [Key]
@@ -22,7 +20,12 @@ public partial class Usuario
     public string Apellido { get; set; } = null!;
 
     [StringLength(250)]
-    public string Email { get; set; } = null!;
+    public string? Email { get; set; }
+
+    [StringLength(100)]
+    public string? NombreUsuario { get; set; }
+
+    public int? PacienteId { get; set; }
 
     [StringLength(250)]
     public string PasswordHash { get; set; } = null!;

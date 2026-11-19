@@ -1,13 +1,88 @@
-﻿using GestionCirugiaPlastica.Application.Services;
+using GestionCirugiaPlastica.Application.Services;
 using GestionCirugiaPlastica.Infrastructure.Models;
 using Microsoft.AspNetCore.Mvc;
+using GestionCirugiaPlastica.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace GestionCirugiaPlastica.API.Controllers;
 
 [ApiController]
+[Authorize(Roles = "Doctor")]
 [Route("api/[controller]")]
-public class FotografiasController(FotografiasService fotografiasService) : ControllerBase
+public class FotografiasController(
+    FotografiasService fotografiasService,
+    IDbContextFactory<GestionCirugiaPlasticaContext> contextFactory,
+    IWebHostEnvironment environment
+) : ControllerBase
 {
+    private const long MaxImageBytes = 8 * 1024 * 1024;
+
+    [HttpGet("cirugia/{cirugiaId:int}")]
+    public async Task<IActionResult> PorCirugia(int cirugiaId)
+    {
+        var result = await fotografiasService.GetList(f => f.CirugiaId == cirugiaId);
+        return result.IsSuccess ? Ok(result) : BadRequest(result);
+    }
+
+    [HttpPost("cirugia/{cirugiaId:int}/archivo")]
+    [RequestSizeLimit(9 * 1024 * 1024)]
+    public async Task<IActionResult> Subir(int cirugiaId, IFormFile archivo, [FromForm] string? descripcion)
+    {
+        if (archivo is null || archivo.Length == 0) return BadRequest(new { message = "Selecciona una imagen." });
+        if (archivo.Length > MaxImageBytes) return BadRequest(new { message = "La imagen no puede superar 8 MB." });
+
+        var extension = archivo.ContentType.ToLowerInvariant() switch
+        {
+            "image/jpeg" => ".jpg",
+            "image/png" => ".png",
+            "image/webp" => ".webp",
+            _ => null
+        };
+        if (extension is null) return BadRequest(new { message = "Formato no permitido. Usa JPEG, PNG o WebP." });
+
+        await using var db = await contextFactory.CreateDbContextAsync();
+        if (!await db.Cirugias.AnyAsync(c => c.CirugiaId == cirugiaId)) return NotFound();
+
+        var directory = Path.Combine(environment.ContentRootPath, "App_Data", "clinical-images");
+        Directory.CreateDirectory(directory);
+        var filename = $"{Guid.NewGuid():N}{extension}";
+        var fullPath = Path.Combine(directory, filename);
+        try
+        {
+            await using (var stream = System.IO.File.Create(fullPath))
+                await archivo.CopyToAsync(stream);
+
+            var photo = new Fotografia
+            {
+                Fecha = DateTime.Now,
+                CirugiaId = cirugiaId,
+                Tipo = archivo.ContentType,
+                RutaArchivo = $"uploads/cirugias/{filename}",
+                Descripcion = string.IsNullOrWhiteSpace(descripcion) ? null : descripcion.Trim()
+            };
+            db.Fotografias.Add(photo);
+            await db.SaveChangesAsync();
+            return Ok(new { photo.FotografiaId, photo.CirugiaId, photo.Fecha, photo.Tipo, photo.RutaArchivo, photo.Descripcion });
+        }
+        catch
+        {
+            if (System.IO.File.Exists(fullPath)) System.IO.File.Delete(fullPath);
+            throw;
+        }
+    }
+
+    [HttpGet("archivo/{id:int}")]
+    public async Task<IActionResult> Archivo(int id)
+    {
+        var result = await fotografiasService.Buscar(id);
+        if (result.IsFailure || result.Value is null) return NotFound();
+        var relative = result.Value.RutaArchivo.Replace('\\', '/');
+        if (!relative.StartsWith("uploads/cirugias/", StringComparison.OrdinalIgnoreCase)) return NotFound();
+        var path = Path.Combine(environment.ContentRootPath, "App_Data", "clinical-images", Path.GetFileName(relative));
+        if (!System.IO.File.Exists(path)) return NotFound();
+        var contentType = result.Value.Tipo is "image/jpeg" or "image/png" or "image/webp" ? result.Value.Tipo : "application/octet-stream";
+        return PhysicalFile(path, contentType);
+    }
     // GET: api/Fotografias
     [HttpGet]
     public async Task<IActionResult> Get()

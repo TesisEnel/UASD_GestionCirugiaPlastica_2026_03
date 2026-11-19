@@ -139,7 +139,7 @@ public class RecetasServices(
                 // el Paciente, la Consulta, etc. que vengan anidados en el JSON.
                 contexto.Recetas.Add(new Receta
                 {
-                    Fecha = DateTime.Now,
+                    Fecha = receta.Fecha == default ? DateTime.Now : receta.Fecha,
                     PacienteId = receta.PacienteId,
                     ConsultaId = receta.ConsultaId,
                     CirugiaId = receta.CirugiaId,
@@ -175,6 +175,8 @@ public class RecetasServices(
                     return Result.Failure(DetalleNoExiste);
 
                 existente.Indicaciones = receta.Indicaciones?.Trim();
+                if (receta.Fecha != default)
+                    existente.Fecha = receta.Fecha;
 
                 // Actualizar o agregar medicamentos, sin eliminar los detalles
                 // históricos que no vengan en la solicitud.

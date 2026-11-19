@@ -237,12 +237,21 @@ public partial class GestionCirugiaPlasticaContext : DbContext
         {
             entity.HasKey(e => e.UsuarioId).HasName("PK__Usuarios__2B3DE7B801F00105");
 
+            entity.HasIndex(e => e.Email).IsUnique().HasFilter("[Email] IS NOT NULL");
+            entity.HasIndex(e => e.NombreUsuario).IsUnique().HasFilter("[NombreUsuario] IS NOT NULL");
+
             entity.Property(e => e.Activo).HasDefaultValue(true);
             entity.Property(e => e.FechaRegistro).HasDefaultValueSql("(getdate())");
 
             entity.HasOne(d => d.Rol).WithMany(p => p.Usuarios)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Usuarios_Roles");
+
+            entity.HasOne<Paciente>()
+                .WithMany()
+                .HasForeignKey(e => e.PacienteId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_Usuarios_Pacientes");
         });
 
         OnModelCreatingPartial(modelBuilder);

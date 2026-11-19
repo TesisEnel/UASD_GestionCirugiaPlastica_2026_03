@@ -1,4 +1,4 @@
-﻿
+
 using GestionCirugiaPlastica.Application.Services;
 using GestionCirugiaPlastica.Infrastructure.Models;
 using Microsoft.AspNetCore.Mvc;
@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace GestionCirugiaPlastica.API.Controllers;
 
 [ApiController]
+[Authorize(Roles = "Doctor")]
 [Route("api/[controller]")]
 public class ControlesPostoperatoriosController(
     ControlesPostoperatoriosService controlesService

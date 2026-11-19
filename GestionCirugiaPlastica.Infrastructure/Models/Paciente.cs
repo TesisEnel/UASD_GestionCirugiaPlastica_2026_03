@@ -26,6 +26,8 @@ public partial class Paciente
 
     public DateOnly? FechaNacimiento { get; set; }
 
+    public bool TieneSeguro { get; set; }
+
     public string? Sexo { get; set; }
 
     [StringLength(250)]

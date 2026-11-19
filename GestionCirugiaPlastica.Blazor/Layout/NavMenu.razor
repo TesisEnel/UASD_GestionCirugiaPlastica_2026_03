@@ -15,6 +15,7 @@
     <!-- MENÚ PRINCIPAL -->
     <div class="menu-label">MENÚ PRINCIPAL</div>
 
+    <AuthorizeView Roles="Doctor,Secretaria" Context="staffSession">
     <nav class="nav-menu">
 
         <NavLink href="/"
@@ -50,6 +51,17 @@
             <span>Pagos</span>
         </NavLink>
 
+        <AuthorizeView Roles="Doctor" Context="doctorSession">
+            <NavLink href="/cirugias" class="nav-item">
+                <i class="fa-solid fa-user-doctor"></i>
+                <span>Cirugías</span>
+            </NavLink>
+            <NavLink href="/recetas" class="nav-item">
+                <i class="fa-solid fa-prescription-bottle-medical"></i>
+                <span>Recetas</span>
+            </NavLink>
+        </AuthorizeView>
+
         <NavLink href="/noticias" class="nav-item">
             <i class="fa-regular fa-newspaper"></i>
             <span>Noticias</span>
@@ -66,6 +78,16 @@
         </NavLink>
 
     </nav>
+    </AuthorizeView>
+
+    <AuthorizeView Roles="Paciente">
+        <nav class="nav-menu">
+            <NavLink href="/mi-portal" class="nav-item">
+                <i class="fa-solid fa-user"></i>
+                <span>Mi perfil y citas</span>
+            </NavLink>
+        </nav>
+    </AuthorizeView>
 
     <!-- PARTE INFERIOR -->
     <div class="sidebar-bottom">
@@ -83,11 +105,7 @@
             </div>
         </div>
 
-        <button class="logout-button" type="button">
-            <i class="fa-solid fa-arrow-right-from-bracket"></i>
-            Cerrar sesión
-        </button>
-
     </div>
 
 </div>
+

@@ -1,5 +1,7 @@
-﻿@page "/"
+@page "/"
+@attribute [Authorize(Roles = "Doctor,Secretaria")]
 
 <PageTitle>Resumen | Tanger Clinic</PageTitle>
 
 <Overview />
+

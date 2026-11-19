@@ -1,0 +1,75 @@
+@page "/mi-portal"
+@attribute [Authorize(Roles = "Paciente")]
+@inject HttpClient Http
+
+<PageTitle>Mi portal | Tanger Clinic</PageTitle>
+<h1>Mi perfil</h1>
+@if (_loading)
+{
+    <p>Cargando tu información...</p>
+}
+else if (_perfil is null)
+{
+    <p role="alert">No se encontró una ficha de paciente vinculada a esta cuenta.</p>
+}
+else
+{
+    <section class="card p-3 mb-3">
+        <h2>@_perfil.Nombre @_perfil.Apellido</h2>
+        <p>Cédula: @_perfil.Cedula</p>
+        <p>Teléfono: @_perfil.Telefono</p>
+        <h3>Estado del seguro</h3>
+        @if (_polizas.Count == 0) { <p>@(_perfil.TieneSeguro ? "Tiene seguro registrado; consulta con recepción para ver los detalles." : "No tienes pólizas registradas.")</p> }
+        else { @foreach (var poliza in _polizas) { <p>@poliza.Seguro — Póliza @poliza.NumeroPoliza — vence: @(poliza.FechaVencimiento?.ToString("dd/MM/yyyy") ?? "No indicada")</p> } }
+    </section>
+    <section class="card p-3 mb-3">
+        <h2>Próximas citas</h2>
+        @if (_citas.Count == 0) { <p>No tienes próximas citas.</p> }
+        else { <ul>@foreach (var cita in _citas) { <li>@cita.Fecha.ToString("dd/MM/yyyy HH:mm") — @cita.TipoCita (@cita.Estado)</li> }</ul> }
+        <EditForm Model="_nuevaCita" OnValidSubmit="AgendarAsync">
+            <DataAnnotationsValidator />
+            <label>Fecha y hora</label>
+            <InputDate @bind-Value="_nuevaCita.Fecha" />
+            <label>Tipo de cita</label>
+            <InputText @bind-Value="_nuevaCita.TipoCita" />
+            <label>Observaciones</label>
+            <InputText @bind-Value="_nuevaCita.Observaciones" />
+            <button class="btn btn-primary mt-2" type="submit">Solicitar cita</button>
+        </EditForm>
+        @if (_message is not null) { <p role="status">@_message</p> }
+    </section>
+}
+
+@code {
+    private bool _loading = true;
+    private ProfileDto? _perfil;
+    private List<AppointmentDto> _citas = new();
+    private List<InsuranceDto> _polizas = new();
+    private string? _message;
+    private NewAppointment _nuevaCita = new() { Fecha = DateTime.Today.AddDays(1) };
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _perfil = await Http.GetFromJsonAsync<ProfileDto>("api/PortalPaciente/perfil");
+            _citas = await Http.GetFromJsonAsync<List<AppointmentDto>>("api/PortalPaciente/citas") ?? new();
+            _polizas = await Http.GetFromJsonAsync<List<InsuranceDto>>("api/PortalPaciente/seguro") ?? new();
+        }
+        catch (HttpRequestException) { _message = "No se pudo conectar con el servidor."; }
+        finally { _loading = false; }
+    }
+
+    private async Task AgendarAsync()
+    {
+        var response = await Http.PostAsJsonAsync("api/PortalPaciente/citas", _nuevaCita);
+        _message = response.IsSuccessStatusCode ? "Solicitud de cita enviada." : "No se pudo enviar la solicitud.";
+        if (response.IsSuccessStatusCode)
+            _citas = await Http.GetFromJsonAsync<List<AppointmentDto>>("api/PortalPaciente/citas") ?? new();
+    }
+
+    private sealed class ProfileDto { public string Nombre { get; set; } = ""; public string Apellido { get; set; } = ""; public string? Cedula { get; set; } public string? Telefono { get; set; } public bool TieneSeguro { get; set; } }
+    private sealed class AppointmentDto { public DateTime Fecha { get; set; } public string? TipoCita { get; set; } public string Estado { get; set; } = ""; }
+    private sealed class InsuranceDto { public string Seguro { get; set; } = ""; public string? NumeroPoliza { get; set; } public DateOnly? FechaVencimiento { get; set; } }
+    private sealed class NewAppointment { [System.ComponentModel.DataAnnotations.Required] public DateTime Fecha { get; set; } public string? TipoCita { get; set; } public string? Observaciones { get; set; } }
+}

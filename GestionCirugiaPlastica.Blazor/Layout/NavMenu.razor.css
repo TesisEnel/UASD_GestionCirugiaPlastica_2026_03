@@ -73,9 +73,16 @@
     border-radius: 11px;
     color: #898586;
     text-decoration: none;
+    text-decoration-line: none !important;
     font-size: 13px;
     font-weight: 500;
     transition: all 0.2s ease;
+}
+
+.nav-menu .nav-item,
+.nav-menu .nav-item:visited {
+    color: #6F696B;
+    text-decoration: none !important;
 }
 
     .nav-item i {
@@ -89,6 +96,7 @@
     .nav-item:hover {
         background: #F8E9ED;
         color: #9E6E79;
+        text-decoration: none !important;
     }
 
     /* OPCIÓN ACTIVA */
@@ -96,6 +104,7 @@
         background: linear-gradient(135deg, #9E6E79, #C67C8E);
         color: #FFFFFF;
         box-shadow: 0 5px 12px rgba(158, 110, 121, 0.18);
+        text-decoration: none !important;
     }
 
         .nav-item.active i {

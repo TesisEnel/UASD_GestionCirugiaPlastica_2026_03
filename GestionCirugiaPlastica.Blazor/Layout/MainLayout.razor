@@ -1,4 +1,4 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
 
 <div class="app-container">
 
@@ -18,10 +18,7 @@
                     <i class="fa-solid fa-user-doctor"></i>
                 </div>
 
-                <div>
-                    <h2>Hola, Dra. Tanger</h2>
-                    <p>Panel de control del consultorio</p>
-                </div>
+                <div><h2>Bienvenido</h2><p>Panel de control del consultorio</p></div>
 
             </div>
 
@@ -55,8 +52,12 @@
     </main>
 
     <!-- COLUMNA 3: CALENDARIO Y CITAS -->
-    <aside class="right-panel">
-        <RightCalendarPanel />
-    </aside>
+    <AuthorizeView Roles="Doctor,Secretaria">
+        <Authorized>
+            <aside class="right-panel"><RightCalendarPanel /></aside>
+        </Authorized>
+    </AuthorizeView>
 
 </div>
+
+

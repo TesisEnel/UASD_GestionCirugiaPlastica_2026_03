@@ -2,6 +2,18 @@ html, body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
 
+.login-page { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: #f7f3f4; }
+.login-card { width: min(100%, 420px); display: flex; flex-direction: column; gap: 12px; padding: 36px; border-radius: 18px; background: #fff; box-shadow: 0 12px 40px rgba(54,56,58,.10); }
+.login-brand { color: #9e6e79; font-size: 32px; text-align: center; }
+.login-card h1, .login-card p { margin: 0; text-align: center; }
+.login-card h1 { color: #36383a; font-size: 24px; }
+.login-card p { margin-bottom: 12px; color: #777273; }
+.login-card label { color: #36383a; font-size: 13px; font-weight: 600; }
+.login-card input { padding: 11px 12px; border: 1px solid #eae6e7; border-radius: 9px; }
+.login-card button { margin-top: 8px; padding: 12px; border: 0; border-radius: 9px; background: #9e6e79; color: white; font-weight: 600; }
+.login-card button:disabled { opacity: .65; }
+.login-error { padding: 10px; border-radius: 8px; background: #fbe9e9; color: #b75d5d; font-size: 13px; }
+
 h1:focus {
     outline: none;
 }
@@ -104,6 +116,41 @@ a, .btn-link {
 code {
     color: #c02d76;
 }
+
+/* Vistas médicas: cirugías y recetas */
+.med-page { --med-wine:#68414A; --med-mauve:#9E6E79; --med-border:#E7DDE0; display:flex; flex-direction:column; gap:18px; color:#36383A; }
+.med-page-header { display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap; }
+.med-page-header h1 { margin:0; font-size:24px; }
+.med-page-header p { margin:5px 0 0; color:#777273; }
+.med-card { padding:20px; border:1px solid var(--med-border); border-radius:14px; background:#fff; box-shadow:0 4px 16px rgba(54,56,58,.04); }
+.med-card h2 { margin:0 0 14px; font-size:19px; }
+.med-card h3 { color:var(--med-wine); font-size:16px; }
+.med-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-bottom:16px; }
+.med-grid label,.receta-detail label { display:flex; flex-direction:column; gap:6px; font-size:13px; font-weight:600; }
+.med-grid input,.med-grid select,.med-grid textarea,.receta-detail input,.med-filters select,.med-search { min-width:0; padding:9px 11px; border:1px solid var(--med-border); border-radius:8px; color:#36383A; background:#fff; }
+.med-grid textarea { min-height:72px; }
+.med-span { grid-column:1/-1; }
+.med-primary,.med-secondary { padding:9px 14px; border:1px solid var(--med-wine); border-radius:8px; background:var(--med-wine); color:#fff; font-weight:600; cursor:pointer; text-decoration:none; }
+.med-primary:hover { background:#4F2934; }
+.med-secondary { margin-left:6px; background:#fff; color:var(--med-wine); }
+.med-secondary:hover { background:#F8E9ED; }
+.med-search { flex:1; }
+.med-filters { display:flex; gap:10px; }
+.med-table-scroll { overflow-x:auto; }
+.med-table { width:100%; border-collapse:collapse; }
+.med-table th,.med-table td { padding:11px 10px; border-bottom:1px solid var(--med-border); text-align:left; vertical-align:top; }
+.med-table th { color:var(--med-wine); font-size:12px; }
+.med-status { min-width:170px; padding:7px 9px; border:1px solid #C8AEB5; border-radius:8px; color:#4F2934; background:#fff; font-weight:600; }
+.med-error { padding:11px 14px; border-radius:8px; background:#FBE9E9; color:#8C3131; }
+.receta-detail { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; padding:12px 0; border-top:1px solid var(--med-border); }
+.receta-card header { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+.receta-card header span { color:#777273; font-size:12px; }
+.receta-card header h2 { margin:2px 0; }
+.receta-drugs { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; }
+.receta-drugs > div { display:flex; flex-direction:column; gap:4px; padding:12px; border-left:3px solid #9E6E79; border-radius:8px; background:#FCF8F9; }
+.receta-drugs span,.receta-drugs small { color:#6F696B; }
+.med-form-actions { display:flex; gap:8px; margin-top:14px; }
+@media(max-width:800px) { .receta-detail { grid-template-columns:repeat(2,minmax(0,1fr)); } .med-grid { grid-template-columns:1fr; } }
 
 .form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
     color: var(--bs-secondary-color);

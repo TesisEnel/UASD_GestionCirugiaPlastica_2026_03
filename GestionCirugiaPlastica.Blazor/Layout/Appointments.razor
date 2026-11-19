@@ -1,5 +1,6 @@
-﻿
+
 @page "/citas"
+@attribute [Authorize(Roles = "Doctor,Secretaria")]
 @using System.Net.Http.Json
 @inject HttpClient Http
 
@@ -592,3 +593,4 @@
         public decimal Cost { get; set; }
     }
 }
+

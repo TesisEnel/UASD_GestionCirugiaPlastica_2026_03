@@ -5,6 +5,10 @@ using GestionCirugiaPlastica.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 using System.Text.Json.Serialization.Metadata;
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -56,6 +60,35 @@ builder.Services.AddControllers()
         o.JsonSerializerOptions.ReferenceHandler =
             System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles);
 
+var jwtKey = builder.Configuration["Jwt:Key"];
+if (!string.IsNullOrWhiteSpace(jwtKey) && Encoding.UTF8.GetByteCount(jwtKey) >= 32)
+{
+    builder.Services
+        .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        .AddJwtBearer(options =>
+        {
+            options.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidIssuer = builder.Configuration["Jwt:Issuer"] ?? "GestionCirugiaPlastica.Api",
+                ValidateAudience = true,
+                ValidAudience = builder.Configuration["Jwt:Audience"] ?? "GestionCirugiaPlastica.Blazor",
+                ValidateLifetime = true,
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+                NameClaimType = System.Security.Claims.ClaimTypes.Name,
+                RoleClaimType = System.Security.Claims.ClaimTypes.Role,
+                ClockSkew = TimeSpan.FromSeconds(30)
+            };
+        });
+}
+builder.Services.AddAuthorization(options =>
+{
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+});
+
 // El generador de OpenAPI usa estas opciones (no las de MVC). Se quitan las propiedades
 // de navegación de las entidades SOLO para el esquema, porque tienen referencias
 // circulares (Receta <-> DetallesReceta, etc.) y rompen el documento con
@@ -72,6 +105,34 @@ builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<GestionCirugiaPlasticaContext>>();
+    await using var context = await factory.CreateDbContextAsync();
+    context.Database.EnsureCreated();
+
+    // Restablece las contraseñas de las cuentas de demostración con el mismo
+    // PasswordHasher<Usuario> que valida AuthController durante el login.
+    var demoPasswords = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["doctor.demo"] = "DoctorTest!2026",
+        ["secretaria.demo"] = "SecretariaTest!2026",
+        ["paciente.demo"] = "PacienteTest!2026"
+    };
+    var hasher = new PasswordHasher<Usuario>();
+    var users = (await context.Usuarios
+        .Where(u => u.NombreUsuario != null)
+        .ToListAsync())
+        .Where(u => demoPasswords.ContainsKey(u.NombreUsuario!.Trim()))
+        .ToList();
+
+    foreach (var user in users)
+        user.PasswordHash = hasher.HashPassword(user, demoPasswords[user.NombreUsuario!.Trim()]);
+
+    if (users.Count > 0)
+        await context.SaveChangesAsync();
+}
+
 // Configuración de OpenAPI
 app.MapOpenApi();
 
@@ -86,6 +147,7 @@ app.UseHttpsRedirection();
 // Activar CORS
 app.UseCors("BlazorPolicy");
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();

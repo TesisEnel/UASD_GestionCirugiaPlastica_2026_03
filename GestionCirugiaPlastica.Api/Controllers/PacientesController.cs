@@ -1,4 +1,4 @@
-﻿using Aplicada1.Core;
+using Aplicada1.Core;
 using GestionCirugiaPlastica.Infrastructure.Models;
 using Microsoft.AspNetCore.Mvc;
 
@@ -6,6 +6,7 @@ namespace GestionCirugiaPlastica.Api.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
+[Authorize(Roles = "Doctor,Secretaria")]
 public class PacientesController(
     IServiceResult<Paciente, int> pacientesService
 ) : ControllerBase
@@ -16,6 +17,16 @@ public class PacientesController(
         var resultado = await pacientesService.Guardar(paciente);
 
 
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
+    }
+
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> Actualizar(int id, [FromBody] Paciente paciente)
+    {
+        if (id != paciente.PacienteId)
+            return BadRequest("El ID de la ruta no coincide con el ID del paciente.");
+
+        var resultado = await pacientesService.Guardar(paciente);
         return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 
@@ -95,3 +106,4 @@ public class PacientesController(
         return resultado.IsSuccess ? Ok(resultado) : Conflict(resultado);
     }
 }
+

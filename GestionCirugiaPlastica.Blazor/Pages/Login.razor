@@ -1,0 +1,53 @@
+@page "/login"
+@attribute [AllowAnonymous]
+@inject AuthService Auth
+@inject NavigationManager Navigation
+
+<PageTitle>Iniciar sesión | Tanger Clinic</PageTitle>
+
+<div class="login-page">
+    <EditForm Model="_form" OnValidSubmit="IniciarSesionAsync" class="login-card">
+        <div class="login-brand"><i class="fa-solid fa-heart-pulse"></i></div>
+        <h1>Bienvenido</h1>
+        <p>Inicia sesión en Tanger Clinic</p>
+        <DataAnnotationsValidator />
+        @if (_error is not null) { <div class="login-error" role="alert">@_error</div> }
+        <label for="login-id">Usuario o correo electrónico</label>
+        <InputText id="login-id" @bind-Value="_form.Identifier" autocomplete="username" placeholder="Usuario o correo electrónico" />
+        <label for="login-password">Contraseña</label>
+        <InputText id="login-password" type="password" @bind-Value="_form.Password" autocomplete="current-password" />
+        <button type="submit" disabled="@_busy">@(_busy ? "Ingresando…" : "Iniciar sesión")</button>
+    </EditForm>
+</div>
+
+@code {
+    private readonly LoginForm _form = new();
+    private string? _error;
+    private bool _busy;
+
+    private async Task IniciarSesionAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var result = await Auth.LoginAsync(_form.Identifier, _form.Password);
+            if (result.Success) Navigation.NavigateTo("/");
+            else _error = result.Message;
+        }
+        catch (HttpRequestException)
+        {
+            _error = "No se pudo conectar con la API. Verifica que esté en ejecución.";
+        }
+        finally { _busy = false; }
+    }
+
+    private sealed class LoginForm
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Ingresa tu usuario o correo electrónico.")]
+        public string Identifier { get; set; } = "";
+        [System.ComponentModel.DataAnnotations.Required]
+        public string Password { get; set; } = "";
+    }
+}
+
