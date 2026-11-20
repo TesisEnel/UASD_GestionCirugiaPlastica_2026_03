@@ -1,13 +1,16 @@
 using GestionCirugiaPlastica.Application.Services;
 using GestionCirugiaPlastica.Infrastructure.Models;
 using Microsoft.AspNetCore.Mvc;
+using GestionCirugiaPlastica.Infrastructure.Data;
+using GestionCirugiaPlastica.Api.Services;
+using Microsoft.EntityFrameworkCore;
 
 namespace GestionCirugiaPlastica.API.Controllers;
 
 [ApiController]
 [Authorize(Roles = "Doctora,AsistenteClinico")]
 [Route("api/[controller]")]
-public class ConsultasController(ConsultasService consultasService) : ControllerBase
+public class ConsultasController(ConsultasService consultasService, IDbContextFactory<GestionCirugiaPlasticaContext> contextFactory) : ControllerBase
 {
     // GET: api/Consultas
     [HttpGet]
@@ -50,6 +53,7 @@ public class ConsultasController(ConsultasService consultasService) : Controller
     public async Task<IActionResult> Post([FromBody] Consulta consulta)
     {
         var resultado = await consultasService.Guardar(consulta);
+        if (resultado.IsSuccess) await AuditoriaClinica.RegistrarAsync(contextFactory, User, consulta.PacienteId, "Consulta", consulta.ConsultaId == 0 ? null : consulta.ConsultaId, consulta.ConsultaId == 0 ? "Creacion" : "Actualizacion", "Consulta o diagnóstico actualizado");
         return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 

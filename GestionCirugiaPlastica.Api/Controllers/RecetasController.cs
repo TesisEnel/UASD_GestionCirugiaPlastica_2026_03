@@ -1,6 +1,9 @@
 using GestionCirugiaPlastica.Application.Services;
 using GestionCirugiaPlastica.Infrastructure.Models;
 using Microsoft.AspNetCore.Mvc;
+using GestionCirugiaPlastica.Infrastructure.Data;
+using GestionCirugiaPlastica.Api.Services;
+using Microsoft.EntityFrameworkCore;
 
 namespace GestionCirugiaPlastica.Api.Controllers;
 
@@ -8,7 +11,8 @@ namespace GestionCirugiaPlastica.Api.Controllers;
 [ApiController]
 [Authorize(Roles = "Doctora,AsistenteClinico")]
 public class RecetasController(
-    RecetasServices recetasService
+    RecetasServices recetasService,
+    IDbContextFactory<GestionCirugiaPlasticaContext> contextFactory
 ) : ControllerBase
 {
     // POST: api/Recetas  (registrar o actualizar una receta)
@@ -16,6 +20,7 @@ public class RecetasController(
     public async Task<IActionResult> Guardar([FromBody] Receta receta)
     {
         var resultado = await recetasService.Guardar(receta);
+        if (resultado.IsSuccess) await AuditoriaClinica.RegistrarAsync(contextFactory, User, receta.PacienteId, "Receta", receta.RecetaId == 0 ? null : receta.RecetaId, receta.RecetaId == 0 ? "Creacion" : "Actualizacion", "Prescripción médica actualizada");
         return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 

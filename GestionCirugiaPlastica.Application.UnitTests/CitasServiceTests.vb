@@ -36,6 +36,7 @@ Public Class CitasServiceTests
     Public Async Function Guardar_CitaExistente_ActualizaEstadoYCostoSinDuplicar() As Task
         Dim paciente = SembrarPaciente(Factory)
         Dim original = SembrarCita(Factory, paciente.PacienteId)
+        SembrarPago(Factory, citaId:=original.CitaId, monto:=1000D)
         Dim modificada As New Cita With {
             .CitaId = original.CitaId, .PacienteId = paciente.PacienteId, .Fecha = original.Fecha,
             .Costo = 3000D, .Estado = "Confirmada", .EstadoPago = "Pagada"}
@@ -46,8 +47,37 @@ Public Class CitasServiceTests
         Dim guardadas = LeerTodos(Of Cita)()
         Assert.AreEqual(1, guardadas.Count)
         Assert.AreEqual("Confirmada", guardadas(0).Estado)
-        Assert.AreEqual("Pagada", guardadas(0).EstadoPago)
+        Assert.AreEqual("Parcial", guardadas(0).EstadoPago)
         Assert.AreEqual(3000D, guardadas(0).Costo)
+        Assert.AreEqual(1, Contar(Of Pago)(), "Cambiar el costo no debe crear pagos duplicados.")
+    End Function
+
+    <TestMethod>
+    Public Async Function Guardar_CitaCancelada_ConservaLosPagosRecibidos() As Task
+        Dim paciente = SembrarPaciente(Factory)
+        Dim original = SembrarCita(Factory, paciente.PacienteId)
+        SembrarPago(Factory, citaId:=original.CitaId, monto:=500D)
+        Dim cancelada As New Cita With {
+            .CitaId = original.CitaId, .PacienteId = original.PacienteId, .Fecha = original.Fecha,
+            .Costo = original.Costo, .Estado = "Cancelada", .EstadoPago = "Pendiente"}
+
+        Dim resultado = Await _service.Guardar(cancelada)
+
+        Assert.IsTrue(resultado.IsSuccess)
+        Assert.AreEqual(1, Contar(Of Pago)())
+        Assert.AreEqual("Parcial", LeerTodos(Of Cita)()(0).EstadoPago)
+        Assert.AreEqual(500D, LeerTodos(Of Pago)()(0).Monto)
+    End Function
+
+    <TestMethod>
+    Public Async Function Guardar_CostoNegativo_RetornaFallo() As Task
+        Dim paciente = SembrarPaciente(Factory)
+        Dim cita As New Cita With {.PacienteId = paciente.PacienteId, .Fecha = FechaBase, .Costo = -1D}
+
+        Dim resultado = Await _service.Guardar(cita)
+
+        Assert.IsFalse(resultado.IsSuccess)
+        Assert.AreEqual(0, Contar(Of Cita)())
     End Function
 
     ' REGLA PENDIENTE: hoy lanza DbUpdateException (FK_Citas_Pacientes).

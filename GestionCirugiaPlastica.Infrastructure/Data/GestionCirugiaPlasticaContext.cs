@@ -28,6 +28,10 @@ public partial class GestionCirugiaPlasticaContext : DbContext
 
     public virtual DbSet<HistorialClinico> HistorialClinicos { get; set; }
 
+    public virtual DbSet<DocumentoClinico> DocumentosClinicos { get; set; }
+
+    public virtual DbSet<AuditoriaExpediente> AuditoriaExpedientes { get; set; }
+
     public virtual DbSet<HistorialEstadosCitas> HistorialEstadosCita { get; set; }
 
     public virtual DbSet<Paciente> Pacientes { get; set; }
@@ -50,6 +54,20 @@ public partial class GestionCirugiaPlasticaContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<DocumentoClinico>(entity =>
+        {
+            entity.HasKey(e => e.DocumentoClinicoId);
+            entity.HasIndex(e => e.PacienteId);
+            entity.HasIndex(e => e.CirugiaId);
+            entity.HasIndex(e => e.ConsultaId);
+        });
+
+        modelBuilder.Entity<AuditoriaExpediente>(entity =>
+        {
+            entity.HasKey(e => e.AuditoriaExpedienteId);
+            entity.HasIndex(e => new { e.PacienteId, e.Fecha });
+        });
+
         modelBuilder.Entity<Cirugia>(entity =>
         {
             entity.HasKey(e => e.CirugiaId).HasName("PK__Cirugias__85A3D64EDC84E935");

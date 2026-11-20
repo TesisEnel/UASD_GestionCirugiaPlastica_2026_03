@@ -172,6 +172,27 @@
         background: #FCF8F9;
     }
 
+.appointment-cost-editor {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.appointment-cost-editor input {
+    width: 104px;
+    min-width: 90px;
+    padding: 7px 8px;
+    border: 1px solid #EAE6E7;
+    border-radius: 8px;
+    color: #36383A;
+    font: inherit;
+}
+
+.appointment-cost-editor .btn-secondary-custom {
+    padding: 7px 9px;
+    white-space: nowrap;
+}
+
 /* ESTADOS DE LAS CITAS */
 .appointment-status {
     display: inline-block;

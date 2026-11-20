@@ -4,6 +4,7 @@
 @inject HttpClient Http
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IJSRuntime JS
 @using System.Text.Json
 @using Microsoft.AspNetCore.Components.Forms
 
@@ -11,34 +12,51 @@
 
 <div class="expediente-page">
     <div class="expediente-header">
-        <div><a href="/expedientes">← Buscar expedientes</a><h1>Expediente clínico</h1></div>
+        <div><a href="/pacientes">← Pacientes</a><h1>Expediente clínico</h1></div>
         <input class="expediente-search" placeholder="Buscar por nombre o cédula" @bind="_busqueda" @bind:event="oninput" @onkeydown="BuscarConEnter" />
         <button class="expediente-action" @onclick="BuscarAsync">Buscar</button>
     </div>
 
     @if (_loading) { <p>Cargando expediente...</p> }
-    else if (_expediente is null) { <section class="expediente-card"><p class="expediente-error">@(_error ?? "Busca un paciente por nombre, cédula o ID para abrir su expediente clínico.")</p></section> }
+    else if (_expediente is null) { <p class="expediente-error">@_error</p> }
     else
     {
         <section class="expediente-persona">
             <div><span>Paciente</span><h2>@_expediente.Paciente.Nombre @_expediente.Paciente.Apellido</h2></div>
             <div><span>Cédula</span><strong>@(_expediente.Paciente.Cedula ?? "—")</strong></div>
-            @if (_esDoctora)
-            {
-                <div><span>Seguro</span><strong>@(_expediente.Seguro.TieneSeguro ? "Registrado" : "Sin seguro registrado")</strong></div>
-            }
+            <div><span>Seguro</span><strong>@(_expediente.Seguro.TieneSeguro ? "Registrado" : "Sin seguro registrado")</strong></div>
+        </section>
+
+        <section class="print-only">
+            <h1>Tanger Clinic · Expediente clínico</h1>
+            <h2>@_expediente.Paciente.Nombre @_expediente.Paciente.Apellido</h2>
+            <p>Cédula: @_expediente.Paciente.Cedula · Teléfono: @_expediente.Paciente.Telefono · Correo: @_expediente.Paciente.Email</p>
+            <h3>Antecedentes y medicación</h3>
+            <p><b>Personales:</b> @_expediente.Historial?.AntecedentesPersonales</p><p><b>Familiares:</b> @_expediente.Historial?.AntecedentesFamiliares</p>
+            <p><b>Antecedentes previos:</b> @_expediente.Historial?.Antecedentes</p><p><b>Alergias:</b> @_expediente.Historial?.Alergias</p><p><b>Medicamentos:</b> @_expediente.Historial?.Medicamentos</p><p><b>Notas:</b> @_expediente.Historial?.NotasMedicas</p>
+            <h3>Consultas y diagnósticos</h3>@foreach (var c in _expediente.Consultas) { <p>@c.Fecha.ToString("dd/MM/yyyy") · @c.Motivo · @c.Diagnostico · @c.Observaciones</p> }
+            <h3>Cirugías</h3>@foreach (var op in _expediente.Operaciones) { <p>@op.FechaCirugia.ToString("dd/MM/yyyy") · @op.Procedimiento · @op.Estado · @op.DiagnosticoPreoperatorio</p> }
+            <h3>Fotografías clínicas</h3>@foreach (var foto in _expediente.Fotografias) { <p>@foto.Fecha.ToString("dd/MM/yyyy") · Cirugía #@foto.CirugiaId · @foto.Descripcion</p>@if (!string.IsNullOrWhiteSpace(foto.DataUri)) { <img class="print-photo" src="@foto.DataUri" alt="Fotografía clínica" /> } }
+            <h3>Evaluaciones y seguimiento</h3>@foreach (var p in _expediente.Preoperatorios) { <p>@p.FechaEvaluacion.ToString("dd/MM/yyyy") · Evaluación preoperatoria cirugía #@p.CirugiaId · Lab: @p.AnalisisLaboratorio · Cardiológica: @p.EvaluacionCardiologica · Anestésica: @p.EvaluacionAnestesica · Autorizado: @p.Autorizado</p> }@foreach (var c in _expediente.Controles) { <p>@c.Fecha.ToString("dd/MM/yyyy") · Control cirugía #@c.CirugiaId · Día @c.DiasPostoperatorio · @c.Evolucion</p> }
+            <h3>Recetas y documentos</h3>@foreach (var r in _expediente.Recetas) { <p>@r.Fecha.ToString("dd/MM/yyyy") · @r.Indicaciones · @string.Join(", ", r.Detalles.Select(d => d.Medicamento + " " + d.Dosis))</p> }@foreach (var d in _expediente.Documentos) { <p>@d.FechaCarga.ToLocalTime().ToString("dd/MM/yyyy") · @d.Categoria · @d.NombreArchivo · @d.Descripcion</p> }
+            <h3>Citas</h3>@foreach (var c in _expediente.Citas) { <p>@c.Fecha.ToString("dd/MM/yyyy HH:mm") · @c.TipoCita · @c.Estado · @c.Observaciones</p> }
         </section>
 
         <div class="expediente-tabs" role="tablist">
             @if (_esDoctora)
             {
-                <button class="@TabClass("personal")" @onclick='() => _tab = "personal"'>Datos personales y seguro</button>
+            <button class="@TabClass("personal")" @onclick='() => _tab = "personal"'>Datos personales y seguro</button>
+            <button class="@TabClass("clinico")" @onclick='() => _tab = "clinico"'>Historial clínico</button>
+            <button class="@TabClass("timeline")" @onclick='() => _tab = "timeline"'>Cronología</button>
+            <button class="@TabClass("consultas")" @onclick='() => _tab = "consultas"'>Consultas</button>
+            <button class="@TabClass("preoperatorio")" @onclick='() => _tab = "preoperatorio"'>Evaluación preoperatoria</button>
+            <button class="@TabClass("postoperatorio")" @onclick='() => _tab = "postoperatorio"'>Seguimiento</button>
+            <button class="@TabClass("recetas")" @onclick='() => _tab = "recetas"'>Recetas</button>
+            <button class="@TabClass("documentos")" @onclick='() => _tab = "documentos"'>Estudios y documentos</button>
+            <button class="@TabClass("citas")" @onclick='() => _tab = "citas"'>Citas y pagos</button>
+            <button class="expediente-secondary" @onclick="Imprimir">Imprimir / Guardar PDF</button>
             }
-            <button class="@TabClass("operaciones")" @onclick='() => _tab = "operaciones"'>Procedimientos y operaciones</button>
-            @if (_esDoctora)
-            {
-                <button class="@TabClass("citas")" @onclick='() => _tab = "citas"'>Historial de citas</button>
-            }
+            <button class="@TabClass("operaciones")" @onclick='() => _tab = "operaciones"'>Cirugías y fotografías</button>
         </div>
 
         @if (_tab == "personal" && _esDoctora)
@@ -78,6 +96,58 @@
                 @if (_status is not null) { <p>@_status</p> }
                 <button class="expediente-action" type="submit">Guardar datos personales</button>
             </EditForm>
+        }
+        else if (_tab == "clinico" && _esDoctora)
+        {
+            <section class="expediente-card">
+                <h2>Antecedentes, alergias y medicamentos</h2>
+                <p class="expediente-muted">Los datos existentes se conservan; los antecedentes generales previos se muestran por separado para no reinterpretarlos.</p>
+                <div class="expediente-grid">
+                    <label>Antecedentes personales<InputTextArea @bind-Value="_historial.AntecedentesPersonales" /></label>
+                    <label>Antecedentes familiares<InputTextArea @bind-Value="_historial.AntecedentesFamiliares" /></label>
+                    <label>Alergias<InputTextArea @bind-Value="_historial.Alergias" /></label>
+                    <label>Medicamentos actuales<InputTextArea @bind-Value="_historial.Medicamentos" /></label>
+                    <label>Antecedentes previos registrados (legado)<InputTextArea @bind-Value="_historial.Antecedentes" /></label>
+                    <label>Notas médicas<InputTextArea @bind-Value="_historial.NotasMedicas" /></label>
+                </div>
+                @if (_expediente.Historial is not null) { <p class="expediente-muted">Última actualización: @_expediente.Historial.FechaActualizacion.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</p> }
+                <button class="expediente-action" @onclick="GuardarHistorialAsync">Guardar información clínica</button>
+                @if (_status is not null) { <p>@_status</p> }
+            </section>
+            @if (_expediente.Auditoria.Count > 0) { <section class="expediente-card"><h3>Actividad clínica reciente</h3>@foreach (var a in _expediente.Auditoria) { <p class="audit-row">@a.Fecha.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @a.Accion · @a.Entidad · Usuario #@a.Usuario · @a.Detalle</p> }</section> }
+        }
+        else if (_tab == "timeline" && _esDoctora)
+        {
+            <section class="expediente-card"><h2>Historial cronológico</h2><input class="expediente-search" placeholder="Filtrar cronología" @bind="_filtroCronologia" @bind:event="oninput" /><div class="clinical-timeline">
+                @foreach (var item in Timeline.Where(x => string.IsNullOrWhiteSpace(_filtroCronologia) || $"{x.Tipo} {x.Detalle}".Contains(_filtroCronologia, StringComparison.OrdinalIgnoreCase)).OrderByDescending(x => x.Fecha)) { <article class="timeline-item"><time>@item.Fecha.ToString("dd/MM/yyyy HH:mm")</time><div><strong>@item.Tipo</strong><p>@item.Detalle</p></div></article> }
+                @if (!Timeline.Any()) { <p>No hay actividad clínica registrada.</p> }
+            </div></section>
+        }
+        else if (_tab == "consultas" && _esDoctora)
+        {
+            <section class="expediente-card"><h2>Consultas y diagnósticos</h2>@if (_expediente.Consultas.Count == 0) { <p>No hay consultas registradas.</p> }@foreach (var c in _expediente.Consultas) { <article class="record-card"><time>@c.Fecha.ToString("dd/MM/yyyy HH:mm")</time><h3>@(c.Motivo ?? "Consulta")</h3><p><b>Diagnóstico:</b> @(c.Diagnostico ?? "—")</p><p>@(c.Observaciones ?? "")</p></article> }</section>
+        }
+        else if (_tab == "preoperatorio" && _esDoctora)
+        {
+            <section class="expediente-card"><h2>Evaluaciones preoperatorias</h2>@if (_expediente.Preoperatorios.Count == 0) { <p>No hay evaluaciones registradas.</p> }@foreach (var p in _expediente.Preoperatorios) { <article class="record-card"><time>@p.FechaEvaluacion.ToString("dd/MM/yyyy") · Cirugía #@p.CirugiaId</time><p><b>Laboratorio anotado:</b> @(p.AnalisisLaboratorio ?? "—")</p><p><b>Cardiológica:</b> @(p.EvaluacionCardiologica ?? "—")</p><p><b>Anestésica:</b> @(p.EvaluacionAnestesica ?? "—")</p><p>Autorizado: @(p.Autorizado ? "Sí" : "No") · @p.Observaciones</p></article> }</section>
+        }
+        else if (_tab == "postoperatorio" && _esDoctora)
+        {
+            <section class="expediente-card"><h2>Evolución postoperatoria</h2>@if (_expediente.Controles.Count == 0) { <p>No hay controles registrados.</p> }@foreach (var c in _expediente.Controles) { <article class="record-card"><time>@c.Fecha.ToString("dd/MM/yyyy") · Día postoperatorio @c.DiasPostoperatorio · Cirugía #@c.CirugiaId</time><p>@c.Evolucion</p><p>Dolor: @(c.Dolor ?? "—") · Inflamación: @(c.Inflamacion ?? "—")</p><p>@c.Observaciones</p><p>Próximo control: @(c.ProximoControl?.ToString("dd/MM/yyyy") ?? "—")</p></article> }</section>
+        }
+        else if (_tab == "recetas" && _esDoctora)
+        {
+            <section class="expediente-card"><h2>Recetas médicas</h2>@if (_expediente.Recetas.Count == 0) { <p>No hay recetas registradas.</p> }@foreach (var r in _expediente.Recetas) { <article class="record-card"><time>@r.Fecha.ToString("dd/MM/yyyy")</time><p>@r.Indicaciones</p>@foreach (var d in r.Detalles) { <p><b>@d.Medicamento</b> · @d.Dosis · @d.Frecuencia · @d.Duracion · @d.Instrucciones</p> }</article> }</section>
+        }
+        else if (_tab == "documentos" && _esDoctora)
+        {
+            <section class="expediente-card"><h2>Laboratorios, estudios, consentimientos y documentos</h2><p class="expediente-muted">Archivos PDF, JPEG, PNG o WebP de hasta 20 MB. Los adjuntos clínicos se conservan y no se borran desde esta pantalla.</p>
+                <div class="expediente-grid"><label>Categoría<select @bind="_categoriaDocumento"><option>Laboratorio</option><option>Estudio</option><option>Consentimiento</option><option>Otro</option></select></label><label>Descripción<input @bind="_descripcionDocumento" /></label><label>Cirugía relacionada (opcional)<select @bind="_cirugiaDocumento"><option value="">Sin cirugía</option>@foreach (var op in _expediente.Operaciones) { <option value="@op.CirugiaId">@op.Procedimiento · @op.FechaCirugia.ToString("dd/MM/yyyy")</option> }</select></label><label>Consulta relacionada (opcional)<select @bind="_consultaDocumento"><option value="">Sin consulta</option>@foreach (var c in _expediente.Consultas) { <option value="@c.ConsultaId">@c.Fecha.ToString("dd/MM/yyyy") · @c.Motivo</option> }</select></label></div>
+                <InputFile accept="application/pdf,image/jpeg,image/png,image/webp" OnChange="SubirDocumentoAsync" />
+                <input class="expediente-search" placeholder="Filtrar por nombre o categoría" @bind="_filtroDocumentos" @bind:event="oninput" />
+                @if (_expediente.Documentos.Count == 0) { <p>No hay documentos adjuntos.</p> }@foreach (var d in _expediente.Documentos.Where(d => string.IsNullOrWhiteSpace(_filtroDocumentos) || $"{d.Categoria} {d.NombreArchivo} {d.Descripcion}".Contains(_filtroDocumentos, StringComparison.OrdinalIgnoreCase))) { <article class="record-card"><span>@d.Categoria · @d.FechaCarga.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span><strong>@d.NombreArchivo</strong><p>@d.Descripcion</p><button class="expediente-secondary" @onclick="() => AbrirDocumentoAsync(d)">Abrir documento</button></article> }
+                @if (_status is not null) { <p>@_status</p> }
+            </section>
         }
         else if (_tab == "operaciones")
         {
@@ -126,11 +196,14 @@
         else if (_tab == "citas" && _esDoctora)
         {
             <section class="expediente-card">
-                <h2>Citas anteriores y próximas</h2>
+                <h2>Citas y pagos</h2>
                 @if (_expediente.Citas.Count == 0) { <p>No hay citas registradas.</p> }
                 <div class="expediente-table-wrap"><table class="expediente-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Estado</th><th>Pago</th><th>Observaciones</th></tr></thead><tbody>
                 @foreach (var cita in _expediente.Citas) { <tr><td>@cita.Fecha.ToString("dd/MM/yyyy HH:mm")</td><td>@cita.TipoCita</td><td>@cita.Estado</td><td>@cita.EstadoPago</td><td>@cita.Observaciones</td></tr> }
                 </tbody></table></div>
+                <h3>Movimientos relacionados</h3>
+                @if (_expediente.Pagos.Count == 0) { <p>No hay pagos vinculados.</p> }
+                @foreach (var pago in _expediente.Pagos) { <p class="record-card">@pago.Fecha.ToString("dd/MM/yyyy") · @pago.Monto.ToString("C") · @(pago.MetodoPago ?? "Método no indicado") · @(pago.Concepto ?? "Pago registrado")</p> }
             </section>
         }
     }
@@ -147,26 +220,37 @@
     private string _busqueda = "";
     private CirugiaForm _cirugiaForm = new();
     private List<ProcedimientoDto> _procedimientos = new();
+    private HistorialDto _historial = new();
+    private string _categoriaDocumento = "Laboratorio";
+    private string? _descripcionDocumento;
+    private int? _cirugiaDocumento;
+    private int? _consultaDocumento;
+    private string _filtroCronologia = "";
+    private string _filtroDocumentos = "";
+
+    private List<TimelineDto> Timeline => _expediente is null ? new() :
+        _expediente.Citas.Select(x => new TimelineDto(x.Fecha, "Cita", $"{x.TipoCita} · {x.Estado}"))
+        .Concat(_expediente.Operaciones.Select(x => new TimelineDto(x.FechaCirugia, "Cirugía", $"{x.Procedimiento} · {x.Estado}")))
+        .Concat(_expediente.Consultas.Select(x => new TimelineDto(x.Fecha, "Consulta", $"{x.Motivo} · {x.Diagnostico}")))
+        .Concat(_expediente.Preoperatorios.Select(x => new TimelineDto(x.FechaEvaluacion, "Evaluación preoperatoria", $"Cirugía #{x.CirugiaId} · {(x.Autorizado ? "Autorizado" : "Pendiente")}")))
+        .Concat(_expediente.Controles.Select(x => new TimelineDto(x.Fecha, "Control postoperatorio", $"Día {x.DiasPostoperatorio} · cirugía #{x.CirugiaId}: {x.Evolucion}")))
+        .Concat(_expediente.Recetas.Select(x => new TimelineDto(x.Fecha, "Receta", x.Indicaciones ?? "Prescripción registrada")))
+        .ToList();
 
     protected override async Task OnParametersSetAsync()
     {
-        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-        _esDoctora = authState.User.IsInRole("Doctora");
-        if (!_esDoctora)
-            _tab = "operaciones";
-
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _esDoctora = auth.User.IsInRole("Doctora");
+        if (!_esDoctora) _tab = "operaciones";
         _loading = true;
         _busqueda = Criterio ?? "";
         if (string.IsNullOrWhiteSpace(Criterio))
         {
             _expediente = null;
-            _error = null;
-            try { await CargarProcedimientosAsync(); }
-            catch (HttpRequestException) { _error = "No se pudo cargar la lista de procedimientos."; }
-            finally { _loading = false; }
+            _error = "Busca un paciente por nombre, cédula o ID para abrir su expediente clínico.";
+            _loading = false;
             return;
         }
-
         try
         {
             await CargarExpedienteAsync();
@@ -191,6 +275,7 @@
     {
         _expediente = await Http.GetFromJsonAsync<ExpedienteDto>($"api/Pacientes/expediente/{Uri.EscapeDataString(Criterio ?? "")}");
         if (_expediente is null) return;
+        if (_expediente.Historial is not null) _historial = _expediente.Historial;
         foreach (var foto in _expediente.Fotografias)
         {
             using var response = await Http.GetAsync($"api/Fotografias/archivo/{foto.FotografiaId}");
@@ -198,6 +283,56 @@
             var bytes = await response.Content.ReadAsByteArrayAsync();
             foto.DataUri = $"data:{response.Content.Headers.ContentType?.MediaType ?? "image/jpeg"};base64,{Convert.ToBase64String(bytes)}";
         }
+    }
+
+    private async Task GuardarHistorialAsync()
+    {
+        if (_expediente is null) return;
+        _historial.PacienteId = _expediente.Paciente.PacienteId;
+        using var response = await Http.PostAsJsonAsync("api/HistorialClinico", _historial);
+        _status = response.IsSuccessStatusCode ? "Información clínica guardada y registrada en auditoría." : await ErrorResponse(response);
+        if (response.IsSuccessStatusCode) await CargarExpedienteAsync();
+    }
+
+    private async Task SubirDocumentoAsync(InputFileChangeEventArgs args)
+    {
+        try
+        {
+            await using var stream = args.File.OpenReadStream(20 * 1024 * 1024);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer);
+            using var form = new MultipartFormDataContent();
+            var file = new ByteArrayContent(buffer.ToArray());
+            file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(args.File.ContentType);
+            form.Add(file, "archivo", args.File.Name);
+            form.Add(new StringContent(_categoriaDocumento), "categoria");
+            form.Add(new StringContent(_descripcionDocumento ?? ""), "descripcion");
+            if (_cirugiaDocumento.HasValue) form.Add(new StringContent(_cirugiaDocumento.Value.ToString()), "cirugiaId");
+            if (_consultaDocumento.HasValue) form.Add(new StringContent(_consultaDocumento.Value.ToString()), "consultaId");
+            using var response = await Http.PostAsync($"api/DocumentosClinicos/paciente/{_expediente!.Paciente.PacienteId}", form);
+            _status = response.IsSuccessStatusCode ? "Documento adjuntado y registrado en auditoría." : await ErrorResponse(response);
+            if (response.IsSuccessStatusCode) await CargarExpedienteAsync();
+        }
+        catch (IOException) { _status = "No se pudo leer el archivo seleccionado."; }
+        catch (InvalidOperationException) { _status = "El documento supera el límite de 20 MB."; }
+    }
+
+    private async Task AbrirDocumentoAsync(DocumentoDto documento)
+    {
+        using var response = await Http.GetAsync($"api/DocumentosClinicos/{documento.DocumentoClinicoId}/archivo");
+        if (!response.IsSuccessStatusCode) { _status = "No se pudo abrir el documento."; return; }
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        var mime = response.Content.Headers.ContentType?.MediaType ?? documento.ContentType;
+        await JS.InvokeVoidAsync("open", $"data:{mime};base64,{Convert.ToBase64String(bytes)}", "_blank");
+    }
+
+    private async Task Imprimir() => await JS.InvokeVoidAsync("window.print");
+    private static async Task<string> ErrorResponse(HttpResponseMessage response)
+    {
+        var body = await response.Content.ReadAsStringAsync();
+        try { using var doc = JsonDocument.Parse(body); if (doc.RootElement.TryGetProperty("message", out var message)) return message.GetString() ?? "La API rechazó la solicitud."; }
+        catch (JsonException) { }
+        return $"No se pudo guardar. Respuesta de la API: {(int)response.StatusCode}.";
     }
 
     private async Task SubirImagenAsync(int cirugiaId, InputFileChangeEventArgs args)
@@ -257,7 +392,17 @@
         }
     }
 
-    private sealed class ExpedienteDto { public PacienteDto Paciente { get; set; } = new(); public SeguroDto Seguro { get; set; } = new(); public List<CitaDto> Citas { get; set; } = new(); public List<OperacionDto> Operaciones { get; set; } = new(); public List<FotoDto> Fotografias { get; set; } = new(); }
+    private sealed class ExpedienteDto { public PacienteDto Paciente { get; set; } = new(); public SeguroDto Seguro { get; set; } = new(); public List<CitaDto> Citas { get; set; } = new(); public List<OperacionDto> Operaciones { get; set; } = new(); public List<FotoDto> Fotografias { get; set; } = new(); public HistorialDto? Historial { get; set; } public List<ConsultaDto> Consultas { get; set; } = new(); public List<PreoperatorioDto> Preoperatorios { get; set; } = new(); public List<ControlDto> Controles { get; set; } = new(); public List<RecetaDto> Recetas { get; set; } = new(); public List<PagoDto> Pagos { get; set; } = new(); public List<DocumentoDto> Documentos { get; set; } = new(); public List<AuditoriaDto> Auditoria { get; set; } = new(); }
+    private sealed class HistorialDto { public int HistoriaId { get; set; } public int PacienteId { get; set; } public DateTime FechaActualizacion { get; set; } public string? Antecedentes { get; set; } public string? AntecedentesPersonales { get; set; } public string? AntecedentesFamiliares { get; set; } public string? Alergias { get; set; } public string? Medicamentos { get; set; } public string? NotasMedicas { get; set; } }
+    private sealed record TimelineDto(DateTime Fecha, string Tipo, string Detalle);
+    private sealed class ConsultaDto { public int ConsultaId { get; set; } public DateTime Fecha { get; set; } public string? Motivo { get; set; } public string? Diagnostico { get; set; } public string? Observaciones { get; set; } }
+    private sealed class PreoperatorioDto { public int CirugiaId { get; set; } public DateTime FechaEvaluacion { get; set; } public string? AnalisisLaboratorio { get; set; } public string? EvaluacionCardiologica { get; set; } public string? EvaluacionAnestesica { get; set; } public bool Autorizado { get; set; } public string? Observaciones { get; set; } }
+    private sealed class ControlDto { public int CirugiaId { get; set; } public DateTime Fecha { get; set; } public int DiasPostoperatorio { get; set; } public string Evolucion { get; set; } = ""; public string? Dolor { get; set; } public string? Inflamacion { get; set; } public string? Observaciones { get; set; } public DateTime? ProximoControl { get; set; } }
+    private sealed class RecetaDto { public DateTime Fecha { get; set; } public string? Indicaciones { get; set; } public List<DetalleRecetaDto> Detalles { get; set; } = new(); }
+    private sealed class DetalleRecetaDto { public string Medicamento { get; set; } = ""; public string? Dosis { get; set; } public string? Frecuencia { get; set; } public string? Duracion { get; set; } public string? Instrucciones { get; set; } }
+    private sealed class PagoDto { public DateTime Fecha { get; set; } public decimal Monto { get; set; } public string? MetodoPago { get; set; } public string? Concepto { get; set; } }
+    private sealed class DocumentoDto { public int DocumentoClinicoId { get; set; } public string Categoria { get; set; } = ""; public string NombreArchivo { get; set; } = ""; public string ContentType { get; set; } = ""; public string? Descripcion { get; set; } public DateTime FechaCarga { get; set; } }
+    private sealed class AuditoriaDto { public DateTime Fecha { get; set; } public string Entidad { get; set; } = ""; public string Accion { get; set; } = ""; public int Usuario { get; set; } public string? Detalle { get; set; } }
     private sealed class PacienteDto { public int PacienteId { get; set; } public string Nombre { get; set; } = ""; public string Apellido { get; set; } = ""; public string? Cedula { get; set; } public DateOnly? FechaNacimiento { get; set; } public string? Sexo { get; set; } public string? Telefono { get; set; } public string? Email { get; set; } public string? Direccion { get; set; } public bool TieneSeguro { get; set; } }
     private sealed class SeguroDto { public bool TieneSeguro { get; set; } public List<PolizaDto> Polizas { get; set; } = new(); }
     private sealed class PolizaDto { public int PacienteSeguroId { get; set; } public int SeguroId { get; set; } public string Aseguradora { get; set; } = ""; public string? NumeroPoliza { get; set; } public string? Titular { get; set; } public DateOnly? FechaVencimiento { get; set; } public string? Observaciones { get; set; } }

@@ -137,14 +137,88 @@ Public Class PagosServiceTests
         Assert.AreEqual(1, Contar(Of Pago)())
     End Function
 
-    ' La fecha del pago la pone el servidor: lo que mande el cliente se ignora.
+    ' La fecha recibida desde el formulario se conserva en el movimiento real.
     <TestMethod>
-    Public Async Function Guardar_PagoNuevo_IgnoraLaFechaQueMandeElCliente() As Task
+    Public Async Function Guardar_PagoNuevo_ConservaLaFechaQueMandeElCliente() As Task
         Dim cita = NuevaCita()
 
         Await _service.Guardar(New Pago With {.CitaId = cita.CitaId, .Monto = 100D, .Fecha = FechaBase})
 
-        Assert.IsTrue(LeerTodos(Of Pago)()(0).Fecha > FechaBase)
+        Assert.AreEqual(FechaBase, LeerTodos(Of Pago)()(0).Fecha)
+    End Function
+
+    <TestMethod>
+    Public Async Function Guardar_AbonosActualizanEstadoDeLaCitaSinCrearSaldosComoPagos() As Task
+        Dim cita = NuevaCita()
+
+        Dim primerAbono = Await _service.Guardar(New Pago With {.CitaId = cita.CitaId, .Monto = 400D, .Fecha = FechaBase})
+        Assert.IsTrue(primerAbono.IsSuccess)
+        Assert.AreEqual("Parcial", LeerTodos(Of Cita)()(0).EstadoPago)
+
+        Dim segundoAbono = Await _service.Guardar(New Pago With {.CitaId = cita.CitaId, .Monto = 1100D, .Fecha = FechaBase.AddDays(1)})
+        Assert.IsTrue(segundoAbono.IsSuccess)
+        Assert.AreEqual("Pagada", LeerTodos(Of Cita)()(0).EstadoPago)
+        Assert.AreEqual(2, Contar(Of Pago)(), "Solo los dos abonos recibidos deben persistirse como pagos.")
+    End Function
+
+    <TestMethod>
+    Public Async Function ObtenerEstadoCuenta_SeparaCobroRealDeSaldoPendiente() As Task
+        Dim cita = NuevaCita()
+        Await _service.Guardar(New Pago With {.CitaId = cita.CitaId, .Monto = 500D, .Fecha = FechaBase})
+
+        Dim resultado = Await _service.ObtenerEstadoCuenta()
+        Dim cobrado = resultado.Value.Single(Function(x) x.EsRecibido)
+        Dim pendiente = resultado.Value.Single(Function(x) Not x.EsRecibido)
+
+        Assert.AreEqual(500D, cobrado.Monto)
+        Assert.AreEqual("Realizado", cobrado.Estado)
+        Assert.AreEqual(1000D, pendiente.Monto)
+        Assert.AreEqual("Parcial", pendiente.Estado)
+        Assert.AreEqual(1, Contar(Of Pago)(), "El saldo calculado no se almacena como pago.")
+    End Function
+
+    <TestMethod>
+    Public Async Function ObtenerReferencias_IncluyeCitaConSaldoYCirugiaDelPaciente() As Task
+        Dim paciente = SembrarPaciente(Factory)
+        Dim cita = SembrarCita(Factory, paciente.PacienteId)
+        Dim procedimiento = SembrarProcedimiento(Factory)
+        Dim cirugia = SembrarCirugia(Factory, paciente.PacienteId, procedimiento.ProcedimientoId)
+
+        Dim resultado = Await _service.ObtenerReferencias(paciente.PacienteId)
+
+        Assert.AreEqual(2, resultado.Value.Count)
+        Assert.IsTrue(resultado.Value.Any(Function(x) x.CitaId.HasValue AndAlso x.CitaId.Value = cita.CitaId AndAlso x.SaldoPendiente = cita.Costo))
+        Assert.IsTrue(resultado.Value.Any(Function(x) x.CirugiaId.HasValue AndAlso x.CirugiaId.Value = cirugia.CirugiaId))
+    End Function
+
+    <TestMethod>
+    Public Async Function ObtenerEstadoCuenta_CitaCancelada_ConservaCobroYMarcaElSaldoCancelado() As Task
+        Dim cita = NuevaCita()
+        Await _service.Guardar(New Pago With {.CitaId = cita.CitaId, .Monto = 500D, .Fecha = FechaBase})
+        Dim citaCancelada = New CitasService(Factory)
+        Await citaCancelada.Guardar(New Cita With {
+            .CitaId = cita.CitaId, .PacienteId = cita.PacienteId, .Fecha = cita.Fecha,
+            .Costo = cita.Costo, .Estado = "Cancelada", .EstadoPago = "Pendiente"})
+
+        Dim resultado = Await _service.ObtenerEstadoCuenta()
+
+        Assert.AreEqual(1, resultado.Value.Where(Function(x) x.Estado = "Realizado" AndAlso x.EsRecibido).Count())
+        Assert.AreEqual(1, resultado.Value.Where(Function(x) x.Estado = "Cancelado" AndAlso Not x.EsRecibido).Count())
+        Assert.AreEqual(1, Contar(Of Pago)())
+    End Function
+
+    <TestMethod>
+    Public Async Function Guardar_NoPermiteNuevoPagoDeCitaCancelada() As Task
+        Dim cita = NuevaCita()
+        Dim citaCancelada = New CitasService(Factory)
+        Await citaCancelada.Guardar(New Cita With {
+            .CitaId = cita.CitaId, .PacienteId = cita.PacienteId, .Fecha = cita.Fecha,
+            .Costo = cita.Costo, .Estado = "Cancelada", .EstadoPago = "Pendiente"})
+
+        Dim resultado = Await _service.Guardar(New Pago With {.CitaId = cita.CitaId, .Monto = 100D})
+
+        Assert.IsFalse(resultado.IsSuccess)
+        Assert.AreEqual(0, Contar(Of Pago)())
     End Function
 
 #End Region

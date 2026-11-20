@@ -48,6 +48,23 @@ public class PagosController(
     [HttpGet]
     public async Task<IActionResult> GetList() => Respuesta(await pagosService.GetList(p => true));
 
+    // GET: api/Pagos/estado-cuenta
+    // Incluye cobros reales y saldos de citas calculados, sin persistir saldos como pagos.
+    [HttpGet("estado-cuenta")]
+    public async Task<IActionResult> EstadoCuenta()
+    {
+        var resultado = await pagosService.ObtenerEstadoCuenta();
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
+    }
+
+    // GET: api/Pagos/referencias/5
+    [HttpGet("referencias/{pacienteId:int}")]
+    public async Task<IActionResult> Referencias(int pacienteId)
+    {
+        var resultado = await pagosService.ObtenerReferencias(pacienteId);
+        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
+    }
+
     [HttpGet("cirugia/{cirugiaId:int}")]
     public async Task<IActionResult> BuscarPorCirugia(int cirugiaId) => Respuesta(await pagosService.BuscarPorCirugia(cirugiaId));
 

@@ -119,6 +119,7 @@ using (var scope = app.Services.CreateScope())
     {
         ["doctor.demo"] = "DoctorTest!2026",
         ["asistente.demo"] = "AsistenteTest!2026",
+        ["doctora.demo"] = "DoctoraTest!2026",
         ["secretaria.demo"] = "SecretariaTest!2026",
         ["paciente.demo"] = "PacienteTest!2026"
     };
