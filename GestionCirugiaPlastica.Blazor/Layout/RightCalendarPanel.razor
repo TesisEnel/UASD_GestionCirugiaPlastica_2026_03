@@ -43,14 +43,17 @@
             </div>
         </Authorized>
         <NotAuthorized>
-            <button type="button" class="right-profile profile-card-button" @onclick="IrALogin">
-                <div class="profile-avatar"><i class="fa-solid fa-user"></i></div>
-                <div class="profile-info"><strong>Invitado</strong><span>Haz clic para iniciar sesión</span></div>
-            </button>
+            <div class="guest-profile-session">
+                <button type="button" class="right-profile profile-card-button" @onclick="IrALogin">
+                    <div class="profile-avatar"><i class="fa-solid fa-user"></i></div>
+                    <div class="profile-info"><strong>Invitado</strong><span>Haz clic para iniciar sesión</span></div>
+                </button>
+                <a class="guest-register-link" href="/registro">¿No tienes cuenta? Regístrate</a>
+            </div>
         </NotAuthorized>
     </AuthorizeView>
 
-    <AuthorizeView Roles="Doctora,Secretaria">
+    <AuthorizeView Roles="Doctora,AsistenteClinico,Secretaria">
         <Authorized>
     <!-- CALENDARIO -->
     <section class="calendar-section">
@@ -134,6 +137,10 @@
                         <div class="appointment-card @(appointment.Status == "Confirmada" ? "highlight" : "")">
                             <strong>@appointment.Type</strong>
                             <span>@appointment.Patient</span>
+                            @if (!string.IsNullOrWhiteSpace(appointment.Reason))
+                            {
+                                <small>@appointment.Reason</small>
+                            }
                         </div>
 
                     </div>
@@ -201,7 +208,8 @@
     // Citas correspondientes al día seleccionado
     private List<AppointmentItem> AppointmentsForSelectedDate =>
         Appointments
-            .Where(a => a.Date.Date == SelectedDate.Date)
+            .Where(a => a.Date.Date == SelectedDate.Date &&
+                !string.Equals(a.Status?.Trim(), "Cancelada", StringComparison.OrdinalIgnoreCase))
             .OrderBy(a => a.Date)
             .ToList();
 
@@ -220,20 +228,37 @@
             : $"{date.ToString("d 'de' MMMM", SpanishCulture)}, {appointmentCount} cita(s)";
     }
 
+    protected override void OnInitialized()
+    {
+        // Build the month grid synchronously so the day numbers are present on first render.
+        GenerateCalendar();
+    }
+
     protected override async Task OnInitializedAsync()
     {
         ProfileState.Changed += ProfileStateChanged;
         _profile = ProfileState.Current;
 
-        var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-        if (authenticationState.User.Identity?.IsAuthenticated != true)
-            return;
-
-        await LoadProfileAsync();
-        if (authenticationState.User.IsInRole("Doctora") || authenticationState.User.IsInRole("Secretaria"))
+        try
         {
-            GenerateCalendar();
-            await LoadAppointments();
+            var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            if (authenticationState.User.Identity?.IsAuthenticated != true)
+                return;
+
+            await LoadProfileAsync();
+            if (authenticationState.User.IsInRole("Doctora") ||
+                authenticationState.User.IsInRole("AsistenteClinico") ||
+                authenticationState.User.IsInRole("Secretaria"))
+                await LoadAppointments();
+        }
+        catch (Exception ex)
+        {
+            Appointments = new();
+            ErrorMessage = "No se pudieron cargar las citas: " + ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
         }
     }
 
@@ -290,6 +315,7 @@
                     CitaId = c.CitaId,
                     Date = c.Fecha,
                     Type = c.TipoCita ?? "Sin especificar",
+                    Reason = c.Observaciones ?? "",
                     Patient = c.Paciente != null
                         ? $"{c.Paciente.Nombre} {c.Paciente.Apellido}"
                         : $"Paciente #{c.PacienteId}",
@@ -378,6 +404,7 @@
         public int CitaId { get; set; }
         public DateTime Date { get; set; }
         public string Type { get; set; } = "";
+        public string Reason { get; set; } = "";
         public string Patient { get; set; } = "";
         public string Status { get; set; } = "";
     }
@@ -390,6 +417,7 @@
         public DateTime Fecha { get; set; }
         public string? TipoCita { get; set; }
         public string Estado { get; set; } = "";
+        public string? Observaciones { get; set; }
         public PatientDto? Paciente { get; set; }
     }
 

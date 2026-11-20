@@ -1,0 +1,124 @@
+@page "/noticias"
+@attribute [AllowAnonymous]
+@inject HttpClient Http
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Noticias | Tanger Clinic</PageTitle>
+
+<main class="public-page clinic-news-page">
+    <header class="public-page-heading"><span class="clinic-eyebrow">TANGER CLINIC</span><h1>Noticias y avisos</h1><p>Información sobre horarios, feriados y novedades de la clínica.</p></header>
+
+    <AuthorizeView Roles="Doctora,Secretaria">
+        <Authorized Context="newsManagerContext">
+            <section class="card p-4 clinic-news-editor">
+                <h2>Publicar un aviso</h2>
+                <EditForm Model="_draft" OnValidSubmit="CreateNewsAsync">
+                    <DataAnnotationsValidator /><ValidationSummary />
+                    <div class="clinic-news-form-grid">
+                        <label>Título<InputText @bind-Value="_draft.Titulo" maxlength="200" /></label>
+                        <label>Resumen (opcional)<InputText @bind-Value="_draft.Resumen" maxlength="500" /></label>
+                        <label class="news-form-full">Contenido<InputTextArea @bind-Value="_draft.Contenido" rows="5" maxlength="10000" /></label>
+                        <label class="news-publish-switch"><InputCheckbox @bind-Value="_draft.Publicada" /> Publicar de inmediato</label>
+                    </div>
+                    <button class="med-primary" type="submit" disabled="@_saving">@(_saving ? "Guardando..." : "Guardar aviso")</button>
+                </EditForm>
+                @if (_adminMessage is not null) { <p class="mt-3 mb-0" role="status">@_adminMessage</p> }
+            </section>
+        </Authorized>
+    </AuthorizeView>
+
+    <section class="clinic-news-public-list">
+        @if (_loading)
+        {
+            <p>Cargando noticias...</p>
+        }
+        else if (_news.Count == 0)
+        {
+            <div class="clinic-news-empty">No hay avisos publicados por el momento.</div>
+        }
+        else
+        {
+            @foreach (var news in _news.OrderByDescending(n => n.FechaPublicacion))
+            {
+                <article class="card clinic-news-article">
+                    <header><time>@news.FechaPublicacion.ToString("dd/MM/yyyy")</time>@if (!news.Publicada){<span class="news-draft-badge">Borrador</span>}</header>
+                    <h2>@news.Titulo</h2>
+                    @if (!string.IsNullOrWhiteSpace(news.Resumen)) { <p class="clinic-news-summary">@news.Resumen</p> }
+                    <p class="clinic-news-content">@news.Contenido</p>
+                    @if (!news.Publicada)
+                    {
+                        <button class="med-secondary" type="button" @onclick="() => TogglePublishedAsync(news)">Publicar</button>
+                    }
+                    else if (_canManage)
+                    {
+                        <button class="med-secondary" type="button" @onclick="() => TogglePublishedAsync(news)">Retirar publicación</button>
+                    }
+                </article>
+            }
+        }
+    </section>
+</main>
+
+@code {
+    private bool _loading = true;
+    private bool _saving;
+    private bool _canManage;
+    private string? _adminMessage;
+    private List<NewsDto> _news = new();
+    private readonly NewsRequest _draft = new() { Publicada = true };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _canManage = state.User.IsInRole("Doctora") || state.User.IsInRole("Secretaria");
+        await LoadNewsAsync();
+        _loading = false;
+    }
+
+    private async Task LoadNewsAsync()
+    {
+        var path = _canManage ? "api/Noticias/admin" : "api/Noticias";
+        try { _news = await Http.GetFromJsonAsync<List<NewsDto>>(path) ?? new(); }
+        catch (HttpRequestException) { _news = new(); }
+    }
+
+    private async Task CreateNewsAsync()
+    {
+        _adminMessage = null;
+        _saving = true;
+        try
+        {
+            using var response = await Http.PostAsJsonAsync("api/Noticias", _draft);
+            if (!response.IsSuccessStatusCode) { _adminMessage = await response.Content.ReadAsStringAsync(); return; }
+            _draft.Titulo = _draft.Resumen = _draft.Contenido = "";
+            _draft.Publicada = true;
+            _adminMessage = "El aviso se guardó correctamente.";
+            await LoadNewsAsync();
+        }
+        catch (HttpRequestException) { _adminMessage = "No se pudo guardar el aviso."; }
+        finally { _saving = false; }
+    }
+
+    private async Task TogglePublishedAsync(NewsDto news)
+    {
+        var update = new NewsRequest { Titulo = news.Titulo, Resumen = news.Resumen, Contenido = news.Contenido, Publicada = !news.Publicada };
+        try
+        {
+            using var response = await Http.PutAsJsonAsync($"api/Noticias/{news.NoticiaId}", update);
+            if (response.IsSuccessStatusCode) await LoadNewsAsync();
+            else _adminMessage = await response.Content.ReadAsStringAsync();
+        }
+        catch (HttpRequestException) { _adminMessage = "No se pudo actualizar la publicación."; }
+    }
+
+    private sealed class NewsDto { public int NoticiaId { get; set; } public string Titulo { get; set; } = ""; public string? Resumen { get; set; } public string Contenido { get; set; } = ""; public DateTime FechaPublicacion { get; set; } public bool Publicada { get; set; } }
+    private sealed class NewsRequest
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Escribe un título.")]
+        [System.ComponentModel.DataAnnotations.StringLength(200)] public string Titulo { get; set; } = "";
+        [System.ComponentModel.DataAnnotations.StringLength(500)] public string? Resumen { get; set; }
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Escribe el contenido del aviso.")]
+        [System.ComponentModel.DataAnnotations.StringLength(10000)] public string Contenido { get; set; } = "";
+        public bool Publicada { get; set; }
+    }
+}

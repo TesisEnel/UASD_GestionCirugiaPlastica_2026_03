@@ -1,0 +1,48 @@
+@implements IDisposable
+@inject HttpClient Http
+
+<a class="notification-link" href="/notificaciones" aria-label="Notificaciones">
+    <i class="fa-regular fa-bell"></i>
+    <span>Notificaciones</span>
+    <span class="notification-count-badge">@(_count > 99 ? "99+" : _count)</span>
+</a>
+
+@code {
+    private int _count;
+    private readonly CancellationTokenSource _cancellation = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshCountAsync();
+        _ = PollAsync();
+    }
+
+    private async Task PollAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(30));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_cancellation.Token))
+                await InvokeAsync(async () => { await RefreshCountAsync(); StateHasChanged(); });
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private async Task RefreshCountAsync()
+    {
+        try
+        {
+            var result = await Http.GetFromJsonAsync<CountDto>("api/Notificaciones/no-leidas/count");
+            _count = result?.Count ?? 0;
+        }
+        catch (HttpRequestException) { _count = 0; }
+    }
+
+    public void Dispose()
+    {
+        _cancellation.Cancel();
+        _cancellation.Dispose();
+    }
+
+    private sealed class CountDto { public int Count { get; set; } }
+}

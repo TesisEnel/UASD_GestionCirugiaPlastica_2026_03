@@ -1,0 +1,59 @@
+@page "/notificaciones"
+@attribute [Authorize(Roles = "Doctora")]
+@inject HttpClient Http
+
+<PageTitle>Notificaciones | Tanger Clinic</PageTitle>
+<main class="med-page notification-page">
+    <header class="med-page-header">
+        <div><h1>Notificaciones</h1><p>Actividad reciente de las citas solicitadas por pacientes y visitantes.</p></div>
+        @if (_notifications.Any(n => !n.Leida))
+        {
+            <button type="button" class="med-secondary" @onclick="MarkAllReadAsync">Marcar todas como leídas</button>
+        }
+    </header>
+    @if (_loading) { <section class="card p-4">Cargando notificaciones...</section> }
+    else if (_error is not null) { <div class="alert alert-danger">@_error</div> }
+    else if (_notifications.Count == 0) { <section class="card p-4">Todavía no hay notificaciones.</section> }
+    else
+    {
+        <div class="notification-list">
+            @foreach (var item in _notifications)
+            {
+                <article class="card notification-card @(item.Leida ? "is-read" : "is-unread")">
+                    <div class="notification-icon"><i class="fa-regular fa-bell"></i></div>
+                    <div class="notification-body"><header><h2>@item.Titulo</h2><time>@item.FechaCreacion.ToString("dd/MM/yyyy HH:mm")</time></header><p>@item.Mensaje</p>@if (item.CitaId.HasValue){<a href="/citas">Ver agenda</a>}</div>
+                    @if (!item.Leida) { <button class="med-secondary notification-read-button" type="button" @onclick="() => MarkReadAsync(item)">Marcar como leída</button> }
+                </article>
+            }
+        </div>
+    }
+</main>
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private List<NotificationDto> _notifications = new();
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try { _notifications = await Http.GetFromJsonAsync<List<NotificationDto>>("api/Notificaciones") ?? new(); }
+        catch (HttpRequestException) { _error = "No se pudieron cargar las notificaciones."; }
+        finally { _loading = false; }
+    }
+
+    private async Task MarkReadAsync(NotificationDto item)
+    {
+        using var response = await Http.PatchAsync($"api/Notificaciones/{item.NotificacionId}/leer", null);
+        if (response.IsSuccessStatusCode) item.Leida = true;
+    }
+
+    private async Task MarkAllReadAsync()
+    {
+        using var response = await Http.PatchAsync("api/Notificaciones/leer-todas", null);
+        if (response.IsSuccessStatusCode) foreach (var item in _notifications) item.Leida = true;
+    }
+
+    private sealed class NotificationDto { public int NotificacionId { get; set; } public string Tipo { get; set; } = ""; public string Titulo { get; set; } = ""; public string Mensaje { get; set; } = ""; public int? CitaId { get; set; } public DateTime FechaCreacion { get; set; } public bool Leida { get; set; } }
+}

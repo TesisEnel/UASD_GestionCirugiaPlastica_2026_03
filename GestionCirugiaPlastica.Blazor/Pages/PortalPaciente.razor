@@ -1,5 +1,6 @@
 @page "/mi-portal"
 @attribute [Authorize(Roles = "Paciente")]
+@using System.Globalization
 @inject HttpClient Http
 
 <PageTitle>Mi portal | Tanger Clinic</PageTitle>
@@ -60,13 +61,43 @@
             }
             else
             {
-                <div class="table-responsive"><table class="table align-middle"><thead><tr><th>Fecha y hora</th><th>Tipo</th><th>Estado</th></tr></thead><tbody>
+                <div class="table-responsive"><table class="table align-middle"><thead><tr><th>Fecha y hora</th><th>Tipo</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
                     @foreach (var cita in _citas)
                     {
-                        <tr><td>@cita.Fecha.ToString("dd/MM/yyyy HH:mm")</td><td>@(cita.TipoCita ?? "Sin especificar")</td><td>@cita.Estado</td></tr>
+                        <tr>
+                            <td>
+                                @if (_editingAppointmentId == cita.CitaId)
+                                {
+                                    <div class="appointment-edit-fields">
+                                        <input aria-label="Nueva fecha" type="date" class="form-control" value="@_editAppointmentDateText" @oninput="OnEditDateChanged" @onchange="OnEditDateChanged" />
+                                        <select aria-label="Nueva hora" class="form-select" @bind="_editAppointmentTimeText">
+                                            @foreach (var time in AvailableTimes)
+                                            {
+                                                <option value="@time">@FormatTimeLabel(time)</option>
+                                            }
+                                        </select>
+                                    </div>
+                                }
+                                else { @cita.Fecha.ToString("dd/MM/yyyy HH:mm") }
+                            </td>
+                            <td>@(cita.TipoCita ?? "Sin especificar")</td><td>@cita.Estado</td>
+                            <td>
+                                @if (_editingAppointmentId == cita.CitaId)
+                                {
+                                    <button class="med-primary appointment-edit-button" type="button" @onclick="() => GuardarCitaAsync(cita)" disabled="@_savingAppointment">Guardar</button>
+                                    <button class="med-secondary appointment-edit-button" type="button" @onclick="CancelarEdicionCita">Volver</button>
+                                }
+                                else
+                                {
+                                    <button class="med-secondary" type="button" @onclick="() => EditarCita(cita)">Editar</button>
+                                    <button class="med-secondary" type="button" @onclick="() => CancelarCitaAsync(cita)" disabled="@_savingAppointment">Cancelar</button>
+                                }
+                            </td>
+                        </tr>
                     }
                 </tbody></table></div>
             }
+            @if (_appointmentMessage is not null) { <p class="mt-2" role="status">@_appointmentMessage</p> }
             <h3 class="h5 mt-3">Solicitar una cita</h3>
             <EditForm Model="_nuevaCita" OnValidSubmit="AgendarAsync">
                 <DataAnnotationsValidator />
@@ -114,6 +145,14 @@
 @code {
     private bool _loading = true;
     private bool _saving;
+    private bool _savingAppointment;
+    private int? _editingAppointmentId;
+    private string _editAppointmentDateText = "";
+    private string _editAppointmentTimeText = "09:00";
+    private static readonly string[] AvailableTimes = Enumerable.Range(0, 21)
+        .Select(i => TimeSpan.FromHours(8).Add(TimeSpan.FromMinutes(i * 30)).ToString(@"hh\:mm", CultureInfo.InvariantCulture))
+        .ToArray();
+    private string? _appointmentMessage;
     private ProfileDto? _perfil;
     private List<AppointmentDto> _citas = new();
     private List<InsuranceDto> _polizas = new();
@@ -171,8 +210,73 @@
         finally { _saving = false; }
     }
 
+    private void EditarCita(AppointmentDto cita)
+    {
+        _appointmentMessage = null;
+        _editingAppointmentId = cita.CitaId;
+        _editAppointmentDateText = cita.Fecha.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        _editAppointmentTimeText = RoundTimeToNearestHalfHour(cita.Fecha);
+    }
+
+    private void OnEditDateChanged(ChangeEventArgs args) => _editAppointmentDateText = args.Value?.ToString() ?? "";
+
+    private static string RoundTimeToNearestHalfHour(DateTime date)
+    {
+        var minutes = date.Hour * 60 + date.Minute;
+        var rounded = (int)Math.Round(minutes / 30d, MidpointRounding.AwayFromZero) * 30;
+        rounded = Math.Clamp(rounded, 8 * 60, 18 * 60);
+        return TimeSpan.FromMinutes(rounded).ToString(@"hh\:mm", CultureInfo.InvariantCulture);
+    }
+
+    private static string FormatTimeLabel(string time) =>
+        DateTime.Today.Add(TimeSpan.ParseExact(time, @"hh\:mm", CultureInfo.InvariantCulture))
+            .ToString("hh:mm tt", CultureInfo.GetCultureInfo("en-US"));
+
+    private void CancelarEdicionCita() => _editingAppointmentId = null;
+
+    private async Task GuardarCitaAsync(AppointmentDto cita)
+    {
+        _appointmentMessage = null;
+        if (!DateTime.TryParseExact(_editAppointmentDateText, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var appointmentDate))
+        {
+            _appointmentMessage = "Indica una fecha válida.";
+            return;
+        }
+        TimeSpan selectedTime;
+        try { selectedTime = TimeSpan.ParseExact(_editAppointmentTimeText, @"hh\:mm", CultureInfo.InvariantCulture); }
+        catch (FormatException) { _appointmentMessage = "Selecciona una hora válida."; return; }
+        var appointmentDateTime = appointmentDate.Date.Add(selectedTime);
+        if (appointmentDateTime <= DateTime.Now) { _appointmentMessage = "Selecciona una fecha y hora futuras."; return; }
+        _savingAppointment = true;
+        try
+        {
+            using var response = await Http.PutAsJsonAsync($"api/PortalPaciente/citas/{cita.CitaId}", new { Fecha = appointmentDateTime });
+            if (!response.IsSuccessStatusCode) { _appointmentMessage = await response.Content.ReadAsStringAsync(); return; }
+            _appointmentMessage = "La cita se reprogramó correctamente.";
+            _editingAppointmentId = null;
+            _citas = await Http.GetFromJsonAsync<List<AppointmentDto>>("api/PortalPaciente/citas") ?? new();
+        }
+        catch (HttpRequestException) { _appointmentMessage = "No se pudo reprogramar la cita."; }
+        finally { _savingAppointment = false; }
+    }
+
+    private async Task CancelarCitaAsync(AppointmentDto cita)
+    {
+        _appointmentMessage = null;
+        _savingAppointment = true;
+        try
+        {
+            using var response = await Http.DeleteAsync($"api/PortalPaciente/citas/{cita.CitaId}");
+            if (!response.IsSuccessStatusCode) { _appointmentMessage = await response.Content.ReadAsStringAsync(); return; }
+            _appointmentMessage = "La cita fue cancelada.";
+            _citas = await Http.GetFromJsonAsync<List<AppointmentDto>>("api/PortalPaciente/citas") ?? new();
+        }
+        catch (HttpRequestException) { _appointmentMessage = "No se pudo cancelar la cita."; }
+        finally { _savingAppointment = false; }
+    }
+
     private sealed class ProfileDto { public bool Vinculado { get; set; } public int? PacienteId { get; set; } public string? Nombre { get; set; } public string? Apellido { get; set; } public string? Cedula { get; set; } public string? Telefono { get; set; } public string? Email { get; set; } public bool TieneSeguro { get; set; } }
-    private sealed class AppointmentDto { public int CitaId { get; set; } public DateTime Fecha { get; set; } public string? TipoCita { get; set; } public string Estado { get; set; } = ""; }
+    private sealed class AppointmentDto { public int CitaId { get; set; } public DateTime Fecha { get; set; } public string? TipoCita { get; set; } public string Estado { get; set; } = ""; public string? Observaciones { get; set; } }
     private sealed class InsuranceDto { public string Seguro { get; set; } = ""; public string? NumeroPoliza { get; set; } public DateOnly? FechaVencimiento { get; set; } }
     private sealed class RecipeDto { public int RecetaId { get; set; } public DateTime Fecha { get; set; } public string? Indicaciones { get; set; } public List<MedicineDto> Medicamentos { get; set; } = new(); }
     private sealed class MedicineDto { public string Medicamento { get; set; } = ""; public string? Dosis { get; set; } public string? Frecuencia { get; set; } public string? Duracion { get; set; } public string? Instrucciones { get; set; } }

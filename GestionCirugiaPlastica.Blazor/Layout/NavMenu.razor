@@ -1,114 +1,67 @@
-﻿<div class="sidebar-content">
+@inject ThemeState ThemeState
+@inject IJSRuntime JS
 
-    <!-- LOGO -->
+<div class="sidebar-content">
     <div class="brand">
-        <div class="brand-icon">
-            <i class="fa-solid fa-heart-pulse"></i>
-        </div>
-
-        <div class="brand-info">
-            <h3>TANGER CLINIC</h3>
-            <span>PLASTIC SURGERY</span>
-        </div>
+        <div class="brand-icon"><i class="fa-solid fa-heart-pulse"></i></div>
+        <div class="brand-info"><h3>TANGER CLINIC</h3><span>PLASTIC SURGERY</span></div>
     </div>
 
-    <!-- MENÚ PRINCIPAL -->
+    <AuthorizeView>
+        <NotAuthorized Context="guestNav">
+            <nav class="nav-menu public-nav-menu">
+                <NavLink href="/" Match="NavLinkMatch.All" class="nav-item"><i class="fa-solid fa-house"></i><span>Inicio</span></NavLink>
+                <NavLink href="/noticias" class="nav-item"><i class="fa-regular fa-newspaper"></i><span>Noticias</span></NavLink>
+                <NavLink href="/agendar-cita" class="nav-item"><i class="fa-regular fa-calendar-plus"></i><span>Agendar cita</span></NavLink>
+            </nav>
+        </NotAuthorized>
+        <Authorized Context="signedInNav">
+            <nav class="nav-menu public-nav-menu">
+                <NavLink href="/noticias" class="nav-item"><i class="fa-regular fa-newspaper"></i><span>Noticias</span></NavLink>
+            </nav>
+        </Authorized>
+    </AuthorizeView>
+
     <div class="menu-label">MENÚ PRINCIPAL</div>
 
     <AuthorizeView Roles="Doctora,Secretaria" Context="staffSession">
-    <nav class="nav-menu">
-
-        <NavLink href="/"
-                 Match="NavLinkMatch.All"
-                 class="nav-item">
-            <i class="fa-solid fa-chart-pie"></i>
-            <span>Resumen</span>
-        </NavLink>
-
-        <NavLink href="/citas" class="nav-item">
-            <i class="fa-regular fa-calendar-check"></i>
-            <span>Citas</span>
-        </NavLink>
-
-        <NavLink href="/pacientes" class="nav-item">
-            <i class="fa-solid fa-user-group"></i>
-            <span>Pacientes</span>
-        </NavLink>
-
-        <NavLink href="/pagos" class="nav-item">
-            <i class="fa-regular fa-credit-card"></i>
-            <span>Pagos</span>
-        </NavLink>
-
-        <AuthorizeView Roles="Doctora" Context="doctorSession">
-            <NavLink href="/cirugias" class="nav-item">
-                <i class="fa-solid fa-user-doctor"></i>
-                <span>Cirugías</span>
-            </NavLink>
-            <NavLink href="/recetas" class="nav-item">
-                <i class="fa-solid fa-prescription-bottle-medical"></i>
-                <span>Recetas</span>
-            </NavLink>
-            <NavLink href="/aseguradoras" class="nav-item">
-                <i class="fa-solid fa-shield-heart"></i>
-                <span>Aseguradoras</span>
-            </NavLink>
-            <NavLink href="/configuracion" class="nav-item">
-                <i class="fa-solid fa-gear"></i>
-                <span>Configuración</span>
-            </NavLink>
-        </AuthorizeView>
-
-    </nav>
+        <nav class="nav-menu">
+            <NavLink href="/" Match="NavLinkMatch.All" class="nav-item"><i class="fa-solid fa-chart-pie"></i><span>Resumen</span></NavLink>
+            <NavLink href="/citas" class="nav-item"><i class="fa-regular fa-calendar-check"></i><span>Citas</span></NavLink>
+            <NavLink href="/pacientes" class="nav-item"><i class="fa-solid fa-user-group"></i><span>Pacientes</span></NavLink>
+            <NavLink href="/pagos" class="nav-item"><i class="fa-regular fa-credit-card"></i><span>Pagos</span></NavLink>
+            <AuthorizeView Roles="Doctora" Context="doctorSession">
+                <NavLink href="/cirugias" class="nav-item"><i class="fa-solid fa-user-doctor"></i><span>Cirugías</span></NavLink>
+                <NavLink href="/recetas" class="nav-item"><i class="fa-solid fa-prescription-bottle-medical"></i><span>Recetas</span></NavLink>
+                <NavLink href="/aseguradoras" class="nav-item"><i class="fa-solid fa-shield-heart"></i><span>Aseguradoras</span></NavLink>
+                <NavLink href="/configuracion" class="nav-item"><i class="fa-solid fa-gear"></i><span>Configuración</span></NavLink>
+            </AuthorizeView>
+        </nav>
     </AuthorizeView>
 
     <AuthorizeView Roles="AsistenteClinico">
         <nav class="nav-menu">
-            <NavLink href="/expedientes" class="nav-item">
-                <i class="fa-solid fa-file-medical"></i>
-                <span>Expedientes</span>
-            </NavLink>
-            <NavLink href="/cirugias" class="nav-item">
-                <i class="fa-solid fa-user-doctor"></i>
-                <span>Cirugías</span>
-            </NavLink>
-            <NavLink href="/recetas" class="nav-item">
-                <i class="fa-solid fa-prescription-bottle-medical"></i>
-                <span>Recetas</span>
-            </NavLink>
+            <NavLink href="/expedientes" class="nav-item"><i class="fa-solid fa-file-medical"></i><span>Expedientes</span></NavLink>
+            <NavLink href="/cirugias" class="nav-item"><i class="fa-solid fa-user-doctor"></i><span>Cirugías</span></NavLink>
+            <NavLink href="/recetas" class="nav-item"><i class="fa-solid fa-prescription-bottle-medical"></i><span>Recetas</span></NavLink>
         </nav>
     </AuthorizeView>
 
     <AuthorizeView Roles="Paciente">
         <nav class="nav-menu">
-            <NavLink href="/inicio-paciente" class="nav-item">
-                <i class="fa-solid fa-house-user"></i>
-                <span>Inicio</span>
-            </NavLink>
-            <NavLink href="/mi-portal" class="nav-item">
-                <i class="fa-solid fa-user"></i>
-                <span>Mi perfil, citas y recetas</span>
-            </NavLink>
+            <NavLink href="/inicio-paciente" class="nav-item"><i class="fa-solid fa-house-user"></i><span>Inicio personal</span></NavLink>
+            <NavLink href="/mi-portal" class="nav-item"><i class="fa-solid fa-user"></i><span>Mi perfil, citas y recetas</span></NavLink>
         </nav>
     </AuthorizeView>
 
-    <!-- PARTE INFERIOR -->
     <div class="sidebar-bottom">
-
         <div class="mode-row">
-            <span>
-                <i class="fa-regular fa-moon"></i>
-                Modo
-            </span>
-
-            <div class="form-check form-switch">
-                <input class="form-check-input"
-                       type="checkbox"
-                       role="switch" />
-            </div>
+            <span><i class="fa-regular fa-moon"></i> Modo oscuro</span>
+            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" checked="@ThemeState.IsDark" @onchange="CambiarTema" aria-label="Activar modo oscuro" /></div>
         </div>
-
     </div>
-
 </div>
 
+@code {
+    private Task CambiarTema(ChangeEventArgs args) => ThemeState.SetDarkAsync(args.Value is bool value && value, JS);
+}

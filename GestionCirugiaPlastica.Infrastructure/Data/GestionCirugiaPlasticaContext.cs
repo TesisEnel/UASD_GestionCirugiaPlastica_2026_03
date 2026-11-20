@@ -26,6 +26,10 @@ public partial class GestionCirugiaPlasticaContext : DbContext
 
     public virtual DbSet<Gasto> Gastos { get; set; }
 
+    public virtual DbSet<Notificacion> Notificaciones { get; set; }
+
+    public virtual DbSet<Noticia> Noticias { get; set; }
+
     public virtual DbSet<HistorialClinico> HistorialClinicos { get; set; }
 
     public virtual DbSet<HistorialEstadosCitas> HistorialEstadosCita { get; set; }
@@ -71,12 +75,33 @@ public partial class GestionCirugiaPlasticaContext : DbContext
 
             entity.Property(e => e.Estado).HasDefaultValue("Pendiente");
             entity.Property(e => e.EstadoPago).HasDefaultValue("Pendiente");
+            entity.HasIndex(e => e.CodigoPublico).IsUnique().HasFilter("[CodigoPublico] IS NOT NULL");
 
             entity.HasOne(d => d.CitaAnterior).WithMany(p => p.InverseCitaAnterior).HasConstraintName("FK_Citas_CitaAnterior");
 
             entity.HasOne(d => d.Paciente).WithMany(p => p.Cita)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Citas_Pacientes");
+        });
+
+        modelBuilder.Entity<Notificacion>(entity =>
+        {
+            entity.HasKey(e => e.NotificacionId);
+            entity.Property(e => e.FechaCreacion).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.Leida).HasDefaultValue(false);
+            entity.HasIndex(e => new { e.Leida, e.FechaCreacion });
+            entity.HasOne(e => e.Cita).WithMany().HasForeignKey(e => e.CitaId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<Noticia>(entity =>
+        {
+            entity.HasKey(e => e.NoticiaId);
+            entity.Property(e => e.FechaPublicacion).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.Publicada).HasDefaultValue(false);
+            entity.HasIndex(e => new { e.Publicada, e.FechaPublicacion });
+            entity.HasOne(e => e.CreadaPorUsuario).WithMany().HasForeignKey(e => e.CreadaPorUsuarioId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<Consulta>(entity =>

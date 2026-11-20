@@ -11,8 +11,7 @@ namespace GestionCirugiaPlastica.Api.Controllers;
 [Route("api/PortalPaciente")]
 [Authorize(Roles = "Paciente")]
 public sealed class PortalPacienteController(
-    IDbContextFactory<GestionCirugiaPlasticaContext> contextFactory,
-    CitasService citasService
+    IDbContextFactory<GestionCirugiaPlasticaContext> contextFactory
 ) : ControllerBase
 {
     [HttpGet("perfil")]
@@ -48,9 +47,9 @@ public sealed class PortalPacienteController(
 
         await using var db = await contextFactory.CreateDbContextAsync();
         var citas = await db.Citas.AsNoTracking()
-            .Where(c => c.PacienteId == pacienteId.Value && c.Fecha >= DateTime.Now)
+            .Where(c => c.PacienteId == pacienteId.Value && c.Fecha >= DateTime.Now && c.Estado != "Cancelada")
             .OrderBy(c => c.Fecha)
-            .Select(c => new { c.CitaId, c.Fecha, c.TipoCita, c.Estado })
+            .Select(c => new { c.CitaId, c.Fecha, c.TipoCita, c.Estado, c.Observaciones })
             .ToListAsync();
         return Ok(citas);
     }
@@ -65,6 +64,11 @@ public sealed class PortalPacienteController(
         if (string.IsNullOrWhiteSpace(request.TipoCita)) return BadRequest("Selecciona el tipo de cita.");
         if (request.TipoCita.Trim().Length > 250) return BadRequest("El tipo de cita es demasiado largo.");
 
+        await using var db = await contextFactory.CreateDbContextAsync();
+        var paciente = await db.Pacientes.AsNoTracking().FirstOrDefaultAsync(p => p.PacienteId == pacienteId.Value);
+        if (paciente is null) return Conflict("No se encontró la ficha de paciente asociada a tu cuenta.");
+        await using var transaction = await db.Database.BeginTransactionAsync();
+
         var cita = new Cita
         {
             Fecha = request.Fecha,
@@ -75,8 +79,72 @@ public sealed class PortalPacienteController(
             Estado = "Pendiente",
             EstadoPago = "Pendiente"
         };
-        var result = await citasService.Guardar(cita);
-        return result.IsSuccess ? Ok(result) : BadRequest(result);
+        db.Citas.Add(cita);
+        await db.SaveChangesAsync();
+        db.Notificaciones.Add(new Notificacion
+        {
+            Tipo = "CitaAgendada",
+            Titulo = "Nueva cita solicitada",
+            Mensaje = $"{paciente.Nombre} {paciente.Apellido} solicitó una cita para {cita.Fecha:dd/MM/yyyy HH:mm}.",
+            CitaId = cita.CitaId,
+            FechaCreacion = DateTime.Now
+        });
+        await db.SaveChangesAsync();
+        await transaction.CommitAsync();
+        return Ok(new { cita.CitaId, cita.Fecha, cita.Estado });
+    }
+
+    [HttpPut("citas/{citaId:int}")]
+    public async Task<IActionResult> ModificarCita(int citaId, [FromBody] ModificacionCita request)
+    {
+        var pacienteId = await ResolverPacienteIdAsync();
+        if (pacienteId is null) return Conflict("Tu cuenta todavía no está vinculada a una ficha de paciente.");
+        if (request.Fecha <= DateTime.Now) return BadRequest("La cita debe tener una fecha y hora futura.");
+
+        await using var db = await contextFactory.CreateDbContextAsync();
+        var cita = await db.Citas.Include(c => c.Paciente)
+            .FirstOrDefaultAsync(c => c.CitaId == citaId && c.PacienteId == pacienteId.Value);
+        if (cita is null) return NotFound("No encontramos esa cita en tu perfil.");
+        if (cita.Estado == "Cancelada" || cita.Fecha < DateTime.Now)
+            return Conflict("Solo puedes reprogramar citas próximas que no estén canceladas.");
+
+        cita.Fecha = request.Fecha;
+        db.Notificaciones.Add(new Notificacion
+        {
+            Tipo = "CitaModificada",
+            Titulo = "Cita reprogramada",
+            Mensaje = $"{cita.Paciente?.Nombre} {cita.Paciente?.Apellido} reprogramó su cita para {cita.Fecha:dd/MM/yyyy HH:mm}.",
+            CitaId = cita.CitaId,
+            FechaCreacion = DateTime.Now
+        });
+        await db.SaveChangesAsync();
+        return Ok(new { cita.CitaId, cita.Fecha, cita.Estado });
+    }
+
+    [HttpDelete("citas/{citaId:int}")]
+    public async Task<IActionResult> CancelarCita(int citaId)
+    {
+        var pacienteId = await ResolverPacienteIdAsync();
+        if (pacienteId is null) return Conflict("Tu cuenta todavía no está vinculada a una ficha de paciente.");
+
+        await using var db = await contextFactory.CreateDbContextAsync();
+        var cita = await db.Citas.Include(c => c.Paciente)
+            .FirstOrDefaultAsync(c => c.CitaId == citaId && c.PacienteId == pacienteId.Value);
+        if (cita is null) return NotFound("No encontramos esa cita en tu perfil.");
+        if (cita.Fecha < DateTime.Now || cita.Estado == "Cancelada")
+            return Conflict("Solo puedes cancelar citas próximas que no estén canceladas.");
+
+        cita.Estado = "Cancelada";
+        db.Notificaciones.Add(new Notificacion
+        {
+            Tipo = "CitaCancelada",
+            Titulo = "Cita cancelada",
+            Mensaje = $"{cita.Paciente?.Nombre} {cita.Paciente?.Apellido} canceló la cita del {cita.Fecha:dd/MM/yyyy HH:mm}.",
+            CitaId = cita.CitaId,
+            FechaCreacion = DateTime.Now
+        });
+        await db.SaveChangesAsync();
+        return Ok(new { Mensaje = "La cita fue cancelada." });
     }
 
     [HttpGet("seguro")]
@@ -153,4 +221,5 @@ public sealed class PortalPacienteController(
     };
 
     public sealed record SolicitudCita(DateTime Fecha, string? TipoCita, string? Observaciones);
+    public sealed record ModificacionCita(DateTime Fecha);
 }

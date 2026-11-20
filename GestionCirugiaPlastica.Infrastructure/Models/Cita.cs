@@ -29,6 +29,9 @@ public partial class Cita
     [StringLength(250)]
     public string EstadoPago { get; set; } = null!;
 
+    [StringLength(32)]
+    public string? CodigoPublico { get; set; }
+
     public string? Observaciones { get; set; }
 
     public int? CitaAnteriorId { get; set; }

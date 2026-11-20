@@ -212,7 +212,7 @@
     height: 4px;
     flex: 0 0 4px;
     border-radius: 50%;
-    background: #9E405E;
+    background: #a65a6e;
 }
 
 .calendar-appointment-dot.hidden {
@@ -235,7 +235,7 @@
     }
 
     .calendar-day.selected .calendar-appointment-dot {
-        background: #FFFFFF;
+        background: #a65a6e;
     }
 
 /* ENCABEZADO DE LAS CITAS */

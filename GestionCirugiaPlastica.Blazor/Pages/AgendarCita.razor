@@ -1,0 +1,154 @@
+@page "/agendar-cita"
+@attribute [AllowAnonymous]
+@using System.Globalization
+@inject HttpClient Http
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Agendar cita | Tanger Clinic</PageTitle>
+
+<main class="public-page public-booking-page">
+    <header class="public-page-heading"><span class="clinic-eyebrow">TANGER CLINIC</span><h1>Agendar una cita</h1><p>Solicita una cita sin crear una cuenta. El correo electrónico es opcional.</p></header>
+
+    @if (_isPatient)
+    {
+        <section class="card p-4 public-booking-card"><h2>Agenda desde tu portal</h2><p>Inicia sesión para ver y administrar tus propias citas, incluida la opción de reprogramarlas.</p><a class="med-primary" href="/mi-portal#agendar-cita">Ir a mi portal</a></section>
+    }
+    else
+    {
+        <div class="public-booking-grid">
+            <section class="card p-4 public-booking-card">
+                <h2>Solicitar una cita</h2>
+                <EditForm Model="_request" OnValidSubmit="SubmitBookingAsync">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+                    <div class="patient-booking-grid">
+                        <label>Nombre<InputText @bind-Value="_request.Nombre" maxlength="250" /></label>
+                        <label>Apellido<InputText @bind-Value="_request.Apellido" maxlength="250" /></label>
+                        <label>Cédula (opcional)<InputText @bind-Value="_request.Cedula" maxlength="20" /></label>
+                        <label>Teléfono (opcional)<InputText @bind-Value="_request.Telefono" maxlength="250" /></label>
+                        <label>Correo electrónico (opcional)<InputText type="text" @bind-Value="_request.Email" maxlength="250" /></label>
+                        <label>Fecha<InputDate TValue="DateTime" Type="InputDateType.Date" @bind-Value="_request.Fecha" min="@FechaMinima" /></label>
+                        <label>Hora<select class="form-select" @bind="_bookingTimeText">@foreach (var time in AvailableTimes){<option value="@time">@FormatTimeLabel(time)</option>}</select></label>
+                        <label>Motivo de la cita<InputSelect @bind-Value="_request.TipoCita"><option value="">Selecciona una opción</option><option>Consulta</option><option>Evaluación</option><option>Seguimiento</option><option>Postoperatorio</option></InputSelect></label>
+                        <label class="patient-booking-full">Información adicional<textarea @bind="_request.Observaciones" rows="3" maxlength="1000"></textarea></label>
+                    </div>
+                    <button class="med-primary mt-3" type="submit" disabled="@_saving">@(_saving ? "Enviando..." : "Solicitar cita")</button>
+                </EditForm>
+                @if (_bookingError is not null) { <p class="alert alert-danger mt-3" role="alert">@_bookingError</p> }
+                @if (_bookingResult is not null)
+                {
+                    <div class="alert alert-success mt-3" role="status"><strong>Solicitud recibida.</strong><p>La cita está pendiente de confirmación. Guarda este código para cancelarla:</p><code class="booking-code">@_bookingResult.CodigoGestion</code></div>
+                }
+            </section>
+
+            <section class="card p-4 public-booking-card public-cancellation-card">
+                <h2>Cancelar una cita</h2>
+                <p>Usa el código de gestión recibido al reservar. Si no lo tienes, puedes verificar con cédula y teléfono.</p>
+                <EditForm Model="_cancellation" OnValidSubmit="CancelBookingAsync">
+                    <div class="public-cancel-fields">
+                        <label>Código de gestión (preferible)<InputText @bind-Value="_cancellation.CodigoGestion" autocomplete="off" /></label>
+                        <div class="public-cancel-divider">o bien</div>
+                        <label>Cédula<InputText @bind-Value="_cancellation.Cedula" /></label>
+                        <label>Teléfono<InputText @bind-Value="_cancellation.Telefono" /></label>
+                    </div>
+                    <button class="med-secondary mt-3" type="submit" disabled="@_canceling">@(_canceling ? "Cancelando..." : "Cancelar cita")</button>
+                </EditForm>
+                @if (_cancelMessage is not null) { <p class="alert @(_cancelSucceeded ? "alert-success" : "alert-warning") mt-3" role="status">@_cancelMessage</p> }
+            </section>
+        </div>
+        <p class="public-booking-note">Los visitantes pueden solicitar o cancelar citas. Para modificar una fecha u hora, inicia sesión con tu cuenta de paciente.</p>
+    }
+</main>
+
+@code {
+    private bool _isPatient;
+    private bool _saving;
+    private bool _canceling;
+    private bool _cancelSucceeded;
+    private string? _bookingError;
+    private string? _cancelMessage;
+    private BookingResult? _bookingResult;
+    private readonly BookingRequest _request = new() { Fecha = DateTime.Now.AddDays(1).Date.AddHours(9) };
+    private string _bookingTimeText = "09:00";
+    private static readonly string[] AvailableTimes = Enumerable.Range(0, 21)
+        .Select(i => TimeSpan.FromHours(8).Add(TimeSpan.FromMinutes(i * 30)).ToString(@"hh\:mm", CultureInfo.InvariantCulture))
+        .ToArray();
+    private readonly CancellationRequest _cancellation = new();
+    private string FechaMinima => DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    private static string FormatTimeLabel(string time) =>
+        DateTime.Today.Add(TimeSpan.ParseExact(time, @"hh\:mm", CultureInfo.InvariantCulture))
+            .ToString("hh:mm tt", CultureInfo.GetCultureInfo("en-US"));
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _isPatient = state.User.IsInRole("Paciente");
+    }
+
+    private async Task SubmitBookingAsync()
+    {
+        _bookingError = null;
+        _bookingResult = null;
+        TimeSpan selectedTime;
+        try { selectedTime = TimeSpan.ParseExact(_bookingTimeText, @"hh\:mm", CultureInfo.InvariantCulture); }
+        catch (FormatException) { _bookingError = "Selecciona una hora válida."; return; }
+        _request.Fecha = _request.Fecha.Date.Add(selectedTime);
+        if (_request.Fecha <= DateTime.Now) { _bookingError = "Selecciona una fecha y hora futuras."; return; }
+        if (string.IsNullOrWhiteSpace(_request.TipoCita)) { _bookingError = "Selecciona el motivo de la cita."; return; }
+        _saving = true;
+        try
+        {
+            using var response = await Http.PostAsJsonAsync("api/Citas/publica", _request);
+            if (response.IsSuccessStatusCode)
+            {
+                _bookingResult = await response.Content.ReadFromJsonAsync<BookingResult>();
+                _request.Nombre = _request.Apellido = _request.Cedula = _request.Telefono = _request.Email = _request.Observaciones = "";
+                _request.TipoCita = "";
+                _request.Fecha = DateTime.Now.AddDays(1).Date.AddHours(9);
+                _bookingTimeText = "09:00";
+            }
+            else _bookingError = await response.Content.ReadAsStringAsync();
+        }
+        catch (HttpRequestException) { _bookingError = "No se pudo enviar la solicitud. Intenta de nuevo."; }
+        finally { _saving = false; }
+    }
+
+    private async Task CancelBookingAsync()
+    {
+        _cancelMessage = null;
+        _cancelSucceeded = false;
+        if (string.IsNullOrWhiteSpace(_cancellation.CodigoGestion) &&
+            (string.IsNullOrWhiteSpace(_cancellation.Cedula) || string.IsNullOrWhiteSpace(_cancellation.Telefono)))
+        {
+            _cancelMessage = "Indica el código o completa tanto la cédula como el teléfono.";
+            return;
+        }
+        _canceling = true;
+        try
+        {
+            using var response = await Http.PostAsJsonAsync("api/Citas/publica/cancelar", _cancellation);
+            _cancelSucceeded = response.IsSuccessStatusCode;
+            _cancelMessage = _cancelSucceeded ? "La cita fue cancelada." : await response.Content.ReadAsStringAsync();
+            if (_cancelSucceeded) { _cancellation.CodigoGestion = _cancellation.Cedula = _cancellation.Telefono = ""; }
+        }
+        catch (HttpRequestException) { _cancelMessage = "No se pudo procesar la cancelación."; }
+        finally { _canceling = false; }
+    }
+
+    private sealed class BookingRequest
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Indica tu nombre.")]
+        public string Nombre { get; set; } = "";
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Indica tu apellido.")]
+        public string Apellido { get; set; } = "";
+        public string? Cedula { get; set; }
+        public string? Telefono { get; set; }
+        public string? Email { get; set; }
+        public DateTime Fecha { get; set; }
+        public string TipoCita { get; set; } = "";
+        public string? Observaciones { get; set; }
+    }
+    private sealed class CancellationRequest { public string? CodigoGestion { get; set; } public string? Cedula { get; set; } public string? Telefono { get; set; } }
+    private sealed class BookingResult { public int CitaId { get; set; } public DateTime Fecha { get; set; } public string Estado { get; set; } = ""; public string CodigoGestion { get; set; } = ""; }
+}

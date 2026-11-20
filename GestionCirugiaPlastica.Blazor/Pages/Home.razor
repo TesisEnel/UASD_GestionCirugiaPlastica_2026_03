@@ -1,7 +1,78 @@
 @page "/"
-@attribute [Authorize(Roles = "Doctora,Secretaria")]
+@attribute [AllowAnonymous]
+@inject HttpClient Http
 
-<PageTitle>Resumen | Tanger Clinic</PageTitle>
+<PageTitle>Tanger Clinic | Cirugía plástica</PageTitle>
 
-<Overview />
+<AuthorizeView Roles="Doctora,Secretaria">
+    <Authorized>
+        <PageTitle>Resumen | Tanger Clinic</PageTitle>
+        <Overview />
+    </Authorized>
+    <NotAuthorized>
+        <main class="clinic-home public-page">
+            <section class="clinic-home-hero">
+                <div class="clinic-home-copy">
+                    <span class="clinic-eyebrow">TANGER CLINIC · CIRUGÍA PLÁSTICA</span>
+                    <h1>Cuidado experto, pensado para ti.</h1>
+                    <p>Atención cercana, segura y personalizada durante cada etapa de tu cuidado.</p>
+                    <div class="clinic-home-actions">
+                        <a class="med-primary" href="/agendar-cita">Agendar una cita</a>
+                        <a class="med-secondary" href="/noticias">Ver noticias</a>
+                    </div>
+                </div>
+                <div class="clinic-home-emblem" aria-hidden="true"><i class="fa-solid fa-heart-pulse"></i></div>
+            </section>
 
+            <section class="clinic-home-services">
+                <article><span><i class="fa-solid fa-user-doctor"></i></span><h2>Atención personalizada</h2><p>Conversamos contigo para entender tus objetivos y orientarte en cada paso.</p></article>
+                <article><span><i class="fa-regular fa-calendar-check"></i></span><h2>Agenda sencilla</h2><p>Solicita tu cita en línea sin crear una cuenta ni proporcionar correo electrónico.</p></article>
+                <article><span><i class="fa-solid fa-shield-heart"></i></span><h2>Acompañamiento</h2><p>Recibe información clara sobre tu consulta y las opciones de atención.</p></article>
+            </section>
+
+            <section class="clinic-home-news">
+                <header><div><span class="clinic-eyebrow">AL DÍA</span><h2>Noticias de la clínica</h2></div><a href="/noticias">Todas las noticias <i class="fa-solid fa-arrow-right"></i></a></header>
+                @if (_newsLoading)
+                {
+                    <p>Cargando noticias...</p>
+                }
+                else if (_news.Count == 0)
+                {
+                    <div class="clinic-news-empty">Pronto compartiremos novedades y avisos de Tanger Clinic.</div>
+                }
+                else
+                {
+                    <div class="clinic-news-grid">
+                        @foreach (var news in _news.Take(3))
+                        {
+                            <article class="clinic-news-card"><time>@news.FechaPublicacion.ToString("dd/MM/yyyy")</time><h3>@news.Titulo</h3>@if (!string.IsNullOrWhiteSpace(news.Resumen)){<p>@news.Resumen</p>}<details><summary>Leer aviso</summary><p>@news.Contenido</p></details></article>
+                        }
+                    </div>
+                }
+            </section>
+
+            <footer class="clinic-home-footer"><strong>Tanger Clinic</strong><span>Cirugía plástica · Atención con cita previa</span><a href="/agendar-cita">Solicitar una cita</a></footer>
+        </main>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private bool _newsLoading = true;
+    private List<NewsCard> _news = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _news = await Http.GetFromJsonAsync<List<NewsCard>>("api/Noticias") ?? new(); }
+        catch (HttpRequestException) { _news = new(); }
+        finally { _newsLoading = false; }
+    }
+
+    private sealed class NewsCard
+    {
+        public int NoticiaId { get; set; }
+        public string Titulo { get; set; } = "";
+        public string? Resumen { get; set; }
+        public string Contenido { get; set; } = "";
+        public DateTime FechaPublicacion { get; set; }
+    }
+}

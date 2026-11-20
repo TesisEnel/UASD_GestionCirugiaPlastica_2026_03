@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using GestionCirugiaPlastica.Blazor;
 using GestionCirugiaPlastica.Blazor.Auth;
+using GestionCirugiaPlastica.Blazor.Layout;
 using Microsoft.AspNetCore.Components.Authorization;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
@@ -21,5 +22,6 @@ builder.Services.AddScoped(sp =>
 });
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<UserProfileState>();
+builder.Services.AddScoped<ThemeState>();
 
 await builder.Build().RunAsync();

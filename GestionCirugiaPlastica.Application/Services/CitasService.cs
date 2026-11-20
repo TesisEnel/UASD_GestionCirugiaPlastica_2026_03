@@ -65,6 +65,7 @@ public class CitasService(
 
         try
         {
+            Cita? nuevaCita = null;
             if (cita.CitaId == 0)
             {
                 var nueva = new Cita
@@ -80,6 +81,7 @@ public class CitasService(
                 };
 
                 contexto.Citas.Add(nueva);
+                nuevaCita = nueva;
             }
             else
             {
@@ -104,6 +106,8 @@ public class CitasService(
             }
 
             await contexto.SaveChangesAsync();
+            if (nuevaCita is not null)
+                cita.CitaId = nuevaCita.CitaId;
 
             return Result.Success();
         }

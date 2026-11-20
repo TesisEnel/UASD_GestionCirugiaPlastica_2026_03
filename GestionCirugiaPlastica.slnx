@@ -5,6 +5,7 @@
     <File Path="Scrip/ActualizarRolesDoctoraAsistente.sql" />
     <File Path="Scrip/AgregarTieneSeguro.sql" />
     <File Path="Scrip/AuthRolesAndTestUsers.sql" />
+    <File Path="Scrip/PublicoCitasNotificacionesNoticias.sql" />
     <File Path="Scrip/RegistroPerfilUsuarios.sql" />
     <File Path="Scrip/SemillaExpedienteDemo.sql" />
   </Folder>

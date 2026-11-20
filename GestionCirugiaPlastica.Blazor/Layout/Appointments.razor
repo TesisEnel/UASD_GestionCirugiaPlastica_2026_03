@@ -2,6 +2,7 @@
 @page "/citas"
 @attribute [Authorize(Roles = "Doctora,Secretaria")]
 @using System.Net.Http.Json
+@using System.Globalization
 @inject HttpClient Http
 
 <PageTitle>Citas | Tanger Clinic</PageTitle>
@@ -135,8 +136,18 @@
                 </div>
 
                 <div class="appointment-form-group">
-                    <label>Fecha y hora</label>
-                    <input type="datetime-local" class="form-control" step="60" @bind="NewDateTime" @bind:format="yyyy-MM-ddTHH:mm" />
+                    <label>Fecha</label>
+                    <input type="date" class="form-control" value="@NewDateText" @oninput="OnNewDateChanged" @onchange="OnNewDateChanged" />
+                </div>
+
+                <div class="appointment-form-group">
+                    <label>Hora</label>
+                    <select class="form-select" @bind="NewTimeText">
+                        @foreach (var time in AvailableTimes)
+                        {
+                            <option value="@time">@FormatTimeLabel(time)</option>
+                        }
+                    </select>
                 </div>
 
                 @if (EditingCitaId != 0)
@@ -319,7 +330,11 @@
     private int EditingCitaId;
     private int NewPatientId;
     private string NewType = "";
-    private DateTime NewDateTime = DateTime.Today.AddDays(1).AddHours(9);
+    private string NewDateText = DateTime.Today.AddDays(1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+    private string NewTimeText = "09:00";
+    private static readonly string[] AvailableTimes = Enumerable.Range(0, 21)
+        .Select(i => TimeSpan.FromHours(8).Add(TimeSpan.FromMinutes(i * 30)).ToString(@"hh\:mm", CultureInfo.InvariantCulture))
+        .ToArray();
     private string NewStatus = "Pendiente";
     private string EstadoPagoActual = "Pendiente";
     private int? CitaAnteriorActual;
@@ -434,6 +449,19 @@
     }
 
     // MOSTRAR U OCULTAR FORMULARIO
+    private void OnNewDateChanged(ChangeEventArgs args) => NewDateText = args.Value?.ToString() ?? "";
+    private static string FormatTimeLabel(string time) =>
+        DateTime.Today.Add(TimeSpan.ParseExact(time, @"hh\:mm", CultureInfo.InvariantCulture))
+            .ToString("hh:mm tt", CultureInfo.GetCultureInfo("en-US"));
+
+    private static string RoundTimeToNearestHalfHour(DateTime date)
+    {
+        var minutes = date.Hour * 60 + date.Minute;
+        var rounded = (int)Math.Round(minutes / 30d, MidpointRounding.AwayFromZero) * 30;
+        rounded = Math.Clamp(rounded, 8 * 60, 18 * 60);
+        return TimeSpan.FromMinutes(rounded).ToString(@"hh\:mm", CultureInfo.InvariantCulture);
+    }
+
     private void ToggleForm()
     {
         if (ShowForm)
@@ -455,7 +483,8 @@
         EditingCitaId = appointment.CitaId;
         NewPatientId = appointment.PacienteId;
         NewType = appointment.Type == "Sin especificar" ? "" : appointment.Type;
-        NewDateTime = appointment.Date;
+        NewDateText = appointment.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        NewTimeText = RoundTimeToNearestHalfHour(appointment.Date);
         NewCost = appointment.Cost;
         NewStatus = appointment.Status;
         NewObservations = appointment.Observations;
@@ -572,6 +601,32 @@
             return;
         }
 
+        if (!DateTime.TryParseExact(
+                NewDateText,
+                "yyyy-MM-dd",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out var appointmentDate))
+        {
+            ErrorMessage = "Indica una fecha válida.";
+            return;
+        }
+
+        TimeSpan selectedTime;
+        try { selectedTime = TimeSpan.ParseExact(NewTimeText, @"hh\:mm", CultureInfo.InvariantCulture); }
+        catch (FormatException) { ErrorMessage = "Selecciona una hora válida."; return; }
+        var appointmentDateTime = appointmentDate.Date.Add(selectedTime);
+
+        var appointmentBeingEdited = EditingCitaId == 0
+            ? null
+            : AppointmentList.FirstOrDefault(a => a.CitaId == EditingCitaId);
+        if (appointmentDateTime <= DateTime.Now &&
+            (appointmentBeingEdited is null || appointmentBeingEdited.Date != appointmentDateTime))
+        {
+            ErrorMessage = "La cita debe tener una fecha y hora futuras.";
+            return;
+        }
+
         IsSaving = true;
 
         try
@@ -579,7 +634,7 @@
             var cita = new
             {
                 CitaId = EditingCitaId,
-                Fecha = NewDateTime,
+                Fecha = appointmentDateTime,
                 PacienteId = NewPatientId,
                 TipoCita = NewType.Trim(),
                 Costo = NewCost,
@@ -686,7 +741,8 @@
         EditingCitaId = 0;
         NewPatientId = 0;
         NewType = "";
-        NewDateTime = DateTime.Today.AddDays(1).AddHours(9);
+        NewDateText = DateTime.Today.AddDays(1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        NewTimeText = "09:00";
         NewStatus = "Pendiente";
         EstadoPagoActual = "Pendiente";
         CitaAnteriorActual = null;
