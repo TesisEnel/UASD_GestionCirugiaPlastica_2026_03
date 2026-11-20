@@ -1,6 +1,9 @@
 using GestionCirugiaPlastica.Application.Services;
 using GestionCirugiaPlastica.Infrastructure.Models;
 using Microsoft.AspNetCore.Mvc;
+using GestionCirugiaPlastica.Infrastructure.Data;
+using GestionCirugiaPlastica.Api.Services;
+using Microsoft.EntityFrameworkCore;
 
 namespace GestionCirugiaPlastica.Api.Controllers;
 
@@ -8,7 +11,8 @@ namespace GestionCirugiaPlastica.Api.Controllers;
 [ApiController]
 [Authorize(Roles = "Doctora,AsistenteClinico")]
 public class PreoperatoriosController(
-    PreoperatoriosServices preoperatoriosService
+    PreoperatoriosServices preoperatoriosService,
+    IDbContextFactory<GestionCirugiaPlasticaContext> contextFactory
 ) : ControllerBase
 {
     // POST: api/Preoperatorios  (registrar una nueva evaluación)
@@ -16,6 +20,8 @@ public class PreoperatoriosController(
     public async Task<IActionResult> Guardar([FromBody] Preoperatorio preoperatorio)
     {
         var resultado = await preoperatoriosService.Guardar(preoperatorio);
+        if (resultado.IsSuccess && await AuditoriaClinica.PacienteDeCirugiaAsync(contextFactory, preoperatorio.CirugiaId) is int pacienteId)
+            await AuditoriaClinica.RegistrarAsync(contextFactory, User, pacienteId, "Preoperatorio", preoperatorio.PreoperatorioId == 0 ? null : preoperatorio.PreoperatorioId, "Creacion", "Evaluación preoperatoria registrada");
         return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 

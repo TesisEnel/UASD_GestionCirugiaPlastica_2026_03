@@ -12,6 +12,9 @@ GO
 IF EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.Usuarios') AND name = N'UQ__Usuarios__A9D10534CD4693E6')
     DROP INDEX UQ__Usuarios__A9D10534CD4693E6 ON dbo.Usuarios;
 GO
+IF EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.Usuarios') AND name = N'UX_Usuarios_Email_NotNull')
+    DROP INDEX UX_Usuarios_Email_NotNull ON dbo.Usuarios;
+GO
 ALTER TABLE dbo.Usuarios ALTER COLUMN Email nvarchar(250) NULL;
 GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.Usuarios') AND name = N'UX_Usuarios_Email_NotNull')
@@ -40,6 +43,14 @@ IF NOT EXISTS (SELECT 1 FROM dbo.Usuarios WHERE NombreUsuario = N'doctor.demo')
     SELECT GETDATE(), N'Doctora', N'Demo', NULL, N'doctor.demo',
         N'AQAAAAEAAYagAAAAEH8ryt/hvDWmOG0PLEJVOMYc0jKeTEjS8wT2wKxQJauNnl6wUdwIW6z7DI1XgBgdJQ==', RolId, 1
     FROM dbo.Roles WHERE Nombre = N'Doctora';
+IF NOT EXISTS (SELECT 1 FROM dbo.Usuarios WHERE NombreUsuario = N'doctora.demo')
+    INSERT dbo.Usuarios (FechaRegistro, Nombre, Apellido, Email, NombreUsuario, PasswordHash, RolId, Activo)
+    SELECT GETDATE(), N'Doctora', N'Demo', NULL, N'doctora.demo',
+        N'AQAAAAEAAYagAAAAEH8ryt/hvDWmOG0PLEJVOMYc0jKeTEjS8wT2wKxQJauNnl6wUdwIW6z7DI1XgBgdJQ==', RolId, 1
+    FROM dbo.Roles WHERE Nombre = N'Doctora';
+UPDATE u SET u.RolId = r.RolId, u.Activo = 1
+FROM dbo.Usuarios u CROSS JOIN dbo.Roles r
+WHERE u.NombreUsuario = N'doctora.demo' AND r.Nombre = N'Doctora';
 
 IF NOT EXISTS (SELECT 1 FROM dbo.Usuarios WHERE NombreUsuario = N'secretaria.demo')
     INSERT dbo.Usuarios (FechaRegistro, Nombre, Apellido, Email, NombreUsuario, PasswordHash, RolId, Activo)
@@ -77,6 +88,7 @@ GO
 
 /* Acceso de prueba (se puede ingresar con username o username/cédula/teléfono para Paciente):
    doctor.demo     / DoctorTest!2026 (rol Doctora)
+   doctora.demo    / DoctoraTest!2026 (rol Doctora)
    asistente.demo  / AsistenteTest!2026
    secretaria.demo / SecretariaTest!2026
    paciente.demo   / PacienteTest!2026

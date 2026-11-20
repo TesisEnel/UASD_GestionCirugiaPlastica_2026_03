@@ -69,6 +69,8 @@ public class HistorialClinicoService(
                     PacienteId = historial.PacienteId,
                     FechaActualizacion = DateTime.Now,
                     Antecedentes = historial.Antecedentes?.Trim(),
+                    AntecedentesPersonales = historial.AntecedentesPersonales?.Trim(),
+                    AntecedentesFamiliares = historial.AntecedentesFamiliares?.Trim(),
                     Alergias = historial.Alergias?.Trim(),
                     Medicamentos = historial.Medicamentos?.Trim(),
                     NotasMedicas = historial.NotasMedicas?.Trim()
@@ -91,6 +93,8 @@ public class HistorialClinicoService(
                 // no el cliente.
                 existente.FechaActualizacion = DateTime.Now;
                 existente.Antecedentes = historial.Antecedentes?.Trim();
+                existente.AntecedentesPersonales = historial.AntecedentesPersonales?.Trim();
+                existente.AntecedentesFamiliares = historial.AntecedentesFamiliares?.Trim();
                 existente.Alergias = historial.Alergias?.Trim();
                 existente.Medicamentos = historial.Medicamentos?.Trim();
                 existente.NotasMedicas = historial.NotasMedicas?.Trim();

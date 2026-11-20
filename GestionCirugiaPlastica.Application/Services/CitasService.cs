@@ -19,6 +19,9 @@ public class CitasService(
     private static readonly Error PacienteNoExiste =
         new("Cita.PacienteNoExiste", "El paciente indicado no existe.");
 
+    private static readonly Error CostoInvalido =
+        new("Cita.CostoInvalido", "El costo de la cita no puede ser negativo.");
+
     private static readonly Error CitaAnteriorInvalida =
         new("Cita.CitaAnteriorInvalida", "La cita anterior no existe o es la misma cita.");
 
@@ -40,6 +43,9 @@ public class CitasService(
     {
         if (cita == null || cita.PacienteId <= 0)
             return Result.Failure(PacienteRequerido);
+
+        if (cita.Costo < 0)
+            return Result.Failure(CostoInvalido);
 
         await using var contexto = await contextFactory.CreateDbContextAsync();
 
@@ -75,7 +81,7 @@ public class CitasService(
                     TipoCita = cita.TipoCita?.Trim(),
                     Costo = cita.Costo,
                     Estado = cita.Estado,
-                    EstadoPago = cita.EstadoPago,
+                    EstadoPago = EstadoPagoCita.Calcular(cita.Costo, 0),
                     Observaciones = cita.Observaciones?.Trim(),
                     CitaAnteriorId = cita.CitaAnteriorId
                 };
@@ -101,8 +107,10 @@ public class CitasService(
                 if (!string.IsNullOrWhiteSpace(cita.Estado))
                     existente.Estado = cita.Estado.Trim();
 
-                if (!string.IsNullOrWhiteSpace(cita.EstadoPago))
-                    existente.EstadoPago = cita.EstadoPago.Trim();
+                var totalRecibido = await contexto.Pagos
+                    .Where(p => p.CitaId == existente.CitaId)
+                    .SumAsync(p => (decimal?)p.Monto) ?? 0m;
+                existente.EstadoPago = EstadoPagoCita.Calcular(existente.Costo, totalRecibido);
             }
 
             await contexto.SaveChangesAsync();

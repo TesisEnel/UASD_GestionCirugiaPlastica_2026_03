@@ -1,6 +1,9 @@
 using Aplicada1.Core;
 using GestionCirugiaPlastica.Infrastructure.Models;
 using Microsoft.AspNetCore.Mvc;
+using GestionCirugiaPlastica.Infrastructure.Data;
+using GestionCirugiaPlastica.Api.Services;
+using Microsoft.EntityFrameworkCore;
 
 namespace GestionCirugiaPlastica.API.Controllers;
 
@@ -10,11 +13,14 @@ namespace GestionCirugiaPlastica.API.Controllers;
 public class CirugiasController : ControllerBase
 {
     private readonly IServiceResult<Cirugia, int> _cirugiasService;
+    private readonly IDbContextFactory<GestionCirugiaPlasticaContext> _contextFactory;
 
     public CirugiasController(
-        IServiceResult<Cirugia, int> cirugiasService)
+        IServiceResult<Cirugia, int> cirugiasService,
+        IDbContextFactory<GestionCirugiaPlasticaContext> contextFactory)
     {
         _cirugiasService = cirugiasService;
+        _contextFactory = contextFactory;
     }
 
     // GET: api/Cirugias
@@ -70,7 +76,11 @@ public class CirugiasController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Post([FromBody] Cirugia cirugia)
     {
+        var esNueva = cirugia.CirugiaId == 0;
         var resultado = await _cirugiasService.Guardar(cirugia);
+
+        if (resultado.IsSuccess)
+            await AuditoriaClinica.RegistrarAsync(_contextFactory, User, cirugia.PacienteId, "Cirugia", cirugia.CirugiaId == 0 ? null : cirugia.CirugiaId, esNueva ? "Creacion" : "Actualizacion", "Registro de cirugía actualizado");
 
         if (resultado.IsFailure)
             return BadRequest(resultado);
@@ -85,6 +95,8 @@ public class CirugiasController : ControllerBase
             return BadRequest("El ID de la ruta no coincide con el ID de la operación.");
 
         var resultado = await _cirugiasService.Guardar(cirugia);
+        if (resultado.IsSuccess)
+            await AuditoriaClinica.RegistrarAsync(_contextFactory, User, cirugia.PacienteId, "Cirugia", cirugia.CirugiaId, "Actualizacion", "Registro de cirugía actualizado");
         return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 

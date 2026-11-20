@@ -2,6 +2,9 @@
 using GestionCirugiaPlastica.Application.Services;
 using GestionCirugiaPlastica.Infrastructure.Models;
 using Microsoft.AspNetCore.Mvc;
+using GestionCirugiaPlastica.Infrastructure.Data;
+using GestionCirugiaPlastica.Api.Services;
+using Microsoft.EntityFrameworkCore;
 
 namespace GestionCirugiaPlastica.API.Controllers;
 
@@ -9,7 +12,8 @@ namespace GestionCirugiaPlastica.API.Controllers;
 [Authorize(Roles = "Doctora,AsistenteClinico")]
 [Route("api/[controller]")]
 public class ControlesPostoperatoriosController(
-    ControlesPostoperatoriosService controlesService
+    ControlesPostoperatoriosService controlesService,
+    IDbContextFactory<GestionCirugiaPlasticaContext> contextFactory
 ) : ControllerBase
 {
     // GET: api/ControlesPostoperatorios
@@ -53,6 +57,8 @@ public class ControlesPostoperatoriosController(
     public async Task<IActionResult> Post([FromBody] ControlesPostoperatorio control)
     {
         var resultado = await controlesService.Guardar(control);
+        if (resultado.IsSuccess && await AuditoriaClinica.PacienteDeCirugiaAsync(contextFactory, control.CirugiaId) is int pacienteId)
+            await AuditoriaClinica.RegistrarAsync(contextFactory, User, pacienteId, "ControlPostoperatorio", control.ControlId == 0 ? null : control.ControlId, control.ControlId == 0 ? "Creacion" : "Actualizacion", "Evolución postoperatoria actualizada");
         return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }
 

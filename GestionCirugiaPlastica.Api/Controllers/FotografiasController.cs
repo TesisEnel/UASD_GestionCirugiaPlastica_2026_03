@@ -3,6 +3,7 @@ using GestionCirugiaPlastica.Infrastructure.Models;
 using Microsoft.AspNetCore.Mvc;
 using GestionCirugiaPlastica.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace GestionCirugiaPlastica.API.Controllers;
 
@@ -61,6 +62,17 @@ public class FotografiasController(
                 Descripcion = string.IsNullOrWhiteSpace(descripcion) ? null : descripcion.Trim()
             };
             db.Fotografias.Add(photo);
+            await db.SaveChangesAsync();
+            db.AuditoriaExpedientes.Add(new AuditoriaExpediente
+            {
+                PacienteId = (await db.Cirugias.Where(c => c.CirugiaId == cirugiaId).Select(c => c.PacienteId).SingleAsync()),
+                UsuarioId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!),
+                Fecha = DateTime.UtcNow,
+                Entidad = "Fotografia",
+                RegistroId = photo.FotografiaId,
+                Accion = "Adjunto",
+                Detalle = $"Fotografía clínica: {photo.Descripcion ?? "Imagen clínica"}"
+            });
             await db.SaveChangesAsync();
             return Ok(new { photo.FotografiaId, photo.CirugiaId, photo.Fecha, photo.Tipo, photo.RutaArchivo, photo.Descripcion });
         }
@@ -131,7 +143,6 @@ public class FotografiasController(
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
-        var resultado = await fotografiasService.Eliminar(id);
-        return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
+        return Conflict(new { message = "Las fotografías forman parte del expediente clínico y no se eliminan desde esta API." });
     }
 }

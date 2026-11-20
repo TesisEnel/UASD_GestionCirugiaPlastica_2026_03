@@ -20,6 +20,12 @@ public partial class HistorialClinico
 
     public string? Antecedentes { get; set; }
 
+    [Column(TypeName = "nvarchar(max)")]
+    public string? AntecedentesPersonales { get; set; }
+
+    [Column(TypeName = "nvarchar(max)")]
+    public string? AntecedentesFamiliares { get; set; }
+
     public string? Alergias { get; set; }
 
     public string? Medicamentos { get; set; }
