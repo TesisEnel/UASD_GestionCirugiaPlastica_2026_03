@@ -9,7 +9,7 @@ internal static class Program
     {
         ApplicationConfiguration.Initialize();
         var settingsPath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
-        var baseUrl = "https://localhost:7214/";
+        var baseUrl = "http://localhost:5258/";
         if (File.Exists(settingsPath))
         {
             using var config = JsonDocument.Parse(File.ReadAllText(settingsPath));

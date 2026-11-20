@@ -212,13 +212,17 @@ public class PagosServices(
             .Select(p => new EstadoCuentaPagoDto
             {
                 PagoId = p.PagoId,
-                PacienteId = p.CitaId.HasValue ? p.Cita!.PacienteId : p.Cirugia!.PacienteId,
-                Paciente = p.CitaId.HasValue
-                    ? p.Cita!.Paciente!.Nombre + " " + p.Cita.Paciente.Apellido
-                    : p.Cirugia!.Paciente.Nombre + " " + p.Cirugia.Paciente.Apellido,
+                PacienteId = p.PacienteId ?? (p.CitaId.HasValue ? p.Cita!.PacienteId : p.CirugiaId.HasValue ? p.Cirugia!.PacienteId : 0),
+                Paciente = p.PacienteId.HasValue
+                    ? p.Paciente!.Nombre + " " + p.Paciente.Apellido
+                    : p.CitaId.HasValue
+                        ? p.Cita!.Paciente!.Nombre + " " + p.Cita.Paciente.Apellido
+                        : p.CirugiaId.HasValue
+                            ? p.Cirugia!.Paciente.Nombre + " " + p.Cirugia.Paciente.Apellido
+                            : "Paciente",
                 CitaId = p.CitaId,
                 CirugiaId = p.CirugiaId,
-                Destino = p.CitaId.HasValue ? "Cita #" + p.CitaId : "Cirugía #" + p.CirugiaId,
+                Destino = p.CitaId.HasValue ? "Cita #" + p.CitaId : p.CirugiaId.HasValue ? "Cirugía #" + p.CirugiaId : "Pago directo al paciente",
                 Fecha = p.Fecha,
                 Monto = p.Monto,
                 MetodoPago = p.MetodoPago,

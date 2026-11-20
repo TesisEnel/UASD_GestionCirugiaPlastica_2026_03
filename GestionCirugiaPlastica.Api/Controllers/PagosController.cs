@@ -33,6 +33,7 @@ public class PagosController(
                 c.CirugiaId,
                 c.PacienteId,
                 c.FechaCirugia,
+                Procedimiento = c.Procedimiento.Nombre,
                 Paciente = c.Paciente.Nombre + " " + c.Paciente.Apellido
             })
             .ToListAsync();
