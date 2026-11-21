@@ -40,7 +40,9 @@ jobs:
       # 3) Restaura todos los paquetes NuGet y dependencias del proyecto antes
       # de compilar. Esto asegura que el entorno ya tenga todo lo necesario.
       - name: Restore dependencies
-        run: dotnet restore 
+        # La solución incluye WinForms (net10.0-windows); habilita su targeting
+        # desde el runner Ubuntu. Las pruebas usan SQLite en memoria.
+        run: dotnet restore GestionCirugiaPlastica.slnx -p:EnableWindowsTargeting=true
 
       # 4) Instala la herramienta de SonarScanner para .NET. Si el secreto
       # SONAR_TOKEN no existe, esta parte se omite para que el pipeline no falle.
@@ -72,7 +74,7 @@ jobs:
       # 7) Compila la solución en modo Release. El flag --no-restore evita que
       # vuelva a restaurar paquetes ya descargados y acelera la ejecución.
       - name: Build solution
-        run: dotnet build --configuration Release --no-restore
+        run: dotnet build GestionCirugiaPlastica.slnx --configuration Release --no-restore -p:EnableWindowsTargeting=true
 
       # 8) Ejecuta la suite de pruebas del proyecto. Si alguna prueba falla,
       # el workflow marcará el pipeline como fallido.
