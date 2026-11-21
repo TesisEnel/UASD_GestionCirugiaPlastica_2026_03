@@ -159,8 +159,8 @@ Public Class UsuariosServicesTests
     ' Guardar se saltaba la protección del último administrador cambiando el RolId.
     <TestMethod>
     Public Async Function Guardar_CambiandoElRolDelUltimoAdministrador_RetornaFalloYConservaElRol() As Task
-        Dim admin = SembrarRolPrueba(Factory, "Administrador")
-        Dim doctor = SembrarRolPrueba(Factory, "Doctor")
+        Dim admin = SembrarRolPrueba(Factory, "Doctora")
+        Dim doctor = SembrarRolPrueba(Factory, "AsistenteClinico")
         Dim usuario = SembrarUsuarioPrueba(Factory, admin.RolId, "jefe@clinica.test")
 
         Dim resultado = Await _service.Guardar(New Usuario With {
@@ -336,8 +336,8 @@ Public Class UsuariosServicesTests
 
     <TestMethod>
     Public Async Function CambiarRol_UltimoAdministradorActivo_RetornaFallo() As Task
-        Dim admin = SembrarRolPrueba(Factory, "Administrador")
-        Dim doctor = SembrarRolPrueba(Factory, "Doctor")
+        Dim admin = SembrarRolPrueba(Factory, "Doctora")
+        Dim doctor = SembrarRolPrueba(Factory, "AsistenteClinico")
         Dim usuario = SembrarUsuarioPrueba(Factory, admin.RolId)
 
         Dim resultado = Await _service.CambiarRol(usuario.UsuarioId, doctor.RolId)
@@ -347,13 +347,13 @@ Public Class UsuariosServicesTests
     End Function
 
     <TestMethod>
-    Public Async Function CambiarRol_AdministradorConOtroAdministradorActivo_LoCambia() As Task
-        Dim admin = SembrarRolPrueba(Factory, "Administrador")
-        Dim doctor = SembrarRolPrueba(Factory, "Doctor")
-        Dim u1 = SembrarUsuarioPrueba(Factory, admin.RolId)
-        SembrarUsuarioPrueba(Factory, admin.RolId)
+    Public Async Function CambiarRol_DoctorConOtraDoctoraActiva_LoCambia() As Task
+        Dim doctora = SembrarRolPrueba(Factory, "Doctora")
+        Dim asistente = SembrarRolPrueba(Factory, "AsistenteClinico")
+        Dim u1 = SembrarUsuarioPrueba(Factory, doctora.RolId)
+        SembrarUsuarioPrueba(Factory, doctora.RolId)
 
-        Dim resultado = Await _service.CambiarRol(u1.UsuarioId, doctor.RolId)
+        Dim resultado = Await _service.CambiarRol(u1.UsuarioId, asistente.RolId)
 
         Assert.IsTrue(resultado.IsSuccess)
     End Function

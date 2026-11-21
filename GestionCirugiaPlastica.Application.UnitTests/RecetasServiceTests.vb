@@ -251,7 +251,7 @@ Public Class RecetasServiceTests
         Assert.AreEqual(0, Contar(Of Receta)())
     End Function
 
-    ' La fecha de la receta la pone el servidor: lo que mande el cliente se ignora.
+    ' En altas nuevas se conserva la fecha que llega en la solicitud.
     <TestMethod>
     Public Async Function Guardar_RecetaNueva_IgnoraLaFechaQueMandeElCliente() As Task
         Dim paciente = SembrarPaciente(Factory)
@@ -259,7 +259,7 @@ Public Class RecetasServiceTests
         Await _service.Guardar(New Receta With {
             .PacienteId = paciente.PacienteId, .Fecha = FechaBase, .DetallesReceta = Detalles("Ibuprofeno")})
 
-        Assert.IsTrue(LeerTodos(Of Receta)()(0).Fecha > FechaBase)
+        Assert.AreEqual(FechaBase, LeerTodos(Of Receta)()(0).Fecha)
     End Function
 
 #End Region
@@ -304,7 +304,7 @@ Public Class RecetasServiceTests
     End Function
 
     <TestMethod>
-    Public Async Function Guardar_RecetaExistente_ConservaFechaYUsuario() As Task
+    Public Async Function Guardar_RecetaExistente_ActualizaFechaYConservaUsuario() As Task
         Dim paciente = SembrarPaciente(Factory)
         Dim usuario = SembrarUsuario(Factory)
         Dim otro = SembrarUsuario(Factory)
@@ -315,7 +315,7 @@ Public Class RecetasServiceTests
             .Fecha = FechaBase.AddYears(1), .DetallesReceta = Detalles("Amoxicilina")})
 
         Dim guardada = LeerTodos(Of Receta)()(0)
-        Assert.AreEqual(FechaBase, guardada.Fecha)
+        Assert.AreEqual(FechaBase.AddYears(1), guardada.Fecha)
         Assert.AreEqual(usuario.UsuarioId, guardada.UsuarioId.Value, "Quien emitió la receta no cambia al editarla.")
     End Function
 

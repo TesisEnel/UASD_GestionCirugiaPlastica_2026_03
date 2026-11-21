@@ -27,6 +27,23 @@ Public NotInheritable Class TestDbContextFactory
             MyBase.ConfigureConventions(configurationBuilder)
             configurationBuilder.Properties(Of Decimal)().HaveConversion(Of Double)()
         End Sub
+
+        Protected Overrides Sub OnModelCreating(modelBuilder As ModelBuilder)
+            MyBase.OnModelCreating(modelBuilder)
+
+            ' SQLite no reconoce los tipos específicos de SQL Server, como nvarchar(max).
+            ' En el modelo aislado de pruebas se representan como TEXT.
+            For Each entityType In modelBuilder.Model.GetEntityTypes()
+                For Each propertyMetadata In entityType.GetProperties()
+                    Dim columnType = propertyMetadata.GetColumnType()
+                    If propertyMetadata.IsPrimaryKey() AndAlso propertyMetadata.ValueGenerated = Microsoft.EntityFrameworkCore.Metadata.ValueGenerated.OnAdd Then
+                        propertyMetadata.SetColumnType("INTEGER")
+                    ElseIf Not String.IsNullOrWhiteSpace(columnType) AndAlso columnType.Contains("max", StringComparison.OrdinalIgnoreCase) Then
+                        propertyMetadata.SetColumnType("TEXT")
+                    End If
+                Next
+            Next
+        End Sub
     End Class
 
     Private ReadOnly _conexion As SqliteConnection
