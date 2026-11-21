@@ -60,16 +60,35 @@ public partial class GestionCirugiaPlasticaContext : DbContext
     {
         modelBuilder.Entity<DocumentoClinico>(entity =>
         {
+            entity.ToTable("DocumentosClinicos");
             entity.HasKey(e => e.DocumentoClinicoId);
+            entity.Property(e => e.FechaCarga).HasColumnType("datetime2").HasDefaultValueSql("(sysutcdatetime())");
+            entity.Property(e => e.Descripcion).HasMaxLength(500);
             entity.HasIndex(e => e.PacienteId);
             entity.HasIndex(e => e.CirugiaId);
             entity.HasIndex(e => e.ConsultaId);
+            entity.HasOne<Paciente>().WithMany().HasForeignKey(e => e.PacienteId).OnDelete(DeleteBehavior.ClientSetNull);
+            entity.HasOne<Cirugia>().WithMany().HasForeignKey(e => e.CirugiaId).OnDelete(DeleteBehavior.ClientSetNull);
+            entity.HasOne<Consulta>().WithMany().HasForeignKey(e => e.ConsultaId).OnDelete(DeleteBehavior.ClientSetNull);
+            entity.HasOne<Usuario>().WithMany().HasForeignKey(e => e.UsuarioId).OnDelete(DeleteBehavior.ClientSetNull);
         });
 
         modelBuilder.Entity<AuditoriaExpediente>(entity =>
         {
+            entity.ToTable("AuditoriaExpediente");
             entity.HasKey(e => e.AuditoriaExpedienteId);
+            entity.Property(e => e.AuditoriaExpedienteId).HasColumnType("bigint").ValueGeneratedOnAdd();
+            entity.Property(e => e.Fecha).HasColumnType("datetime2").HasDefaultValueSql("(sysutcdatetime())");
             entity.HasIndex(e => new { e.PacienteId, e.Fecha });
+            entity.HasOne<Paciente>().WithMany().HasForeignKey(e => e.PacienteId).OnDelete(DeleteBehavior.ClientSetNull);
+            entity.HasOne<Usuario>().WithMany().HasForeignKey(e => e.UsuarioId).OnDelete(DeleteBehavior.ClientSetNull);
+        });
+
+        modelBuilder.Entity<HistorialClinico>(entity =>
+        {
+            entity.ToTable("HistorialClinico");
+            entity.Property(e => e.AntecedentesPersonales).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.AntecedentesFamiliares).HasColumnType("nvarchar(max)");
         });
 
         modelBuilder.Entity<Cirugia>(entity =>
@@ -104,6 +123,7 @@ public partial class GestionCirugiaPlasticaContext : DbContext
 
         modelBuilder.Entity<Notificacion>(entity =>
         {
+            entity.ToTable("Notificaciones");
             entity.HasKey(e => e.NotificacionId);
             entity.Property(e => e.FechaCreacion).HasDefaultValueSql("(getdate())");
             entity.Property(e => e.Leida).HasDefaultValue(false);
@@ -114,6 +134,7 @@ public partial class GestionCirugiaPlasticaContext : DbContext
 
         modelBuilder.Entity<Noticia>(entity =>
         {
+            entity.ToTable("Noticias");
             entity.HasKey(e => e.NoticiaId);
             entity.Property(e => e.FechaPublicacion).HasDefaultValueSql("(getdate())");
             entity.Property(e => e.Publicada).HasDefaultValue(false);
@@ -135,6 +156,7 @@ public partial class GestionCirugiaPlasticaContext : DbContext
 
         modelBuilder.Entity<ControlesPostoperatorio>(entity =>
         {
+            entity.ToTable("ControlesPostoperatorios");
             entity.HasKey(e => e.ControlId).HasName("PK__Controle__091D9B355B120EA9");
 
             entity.HasOne(d => d.Cirugia).WithMany(p => p.ControlesPostoperatorios)
@@ -242,6 +264,7 @@ public partial class GestionCirugiaPlasticaContext : DbContext
 
         modelBuilder.Entity<Preoperatorio>(entity =>
         {
+            entity.ToTable("Preoperatorios");
             entity.HasKey(e => e.PreoperatorioId).HasName("PK__Preopera__4BEE3285C37D3D45");
 
             entity.Property(e => e.FechaEvaluacion).HasDefaultValueSql("(getdate())");

@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GestionCirugiaPlastica.Infrastructure.Models;
 
+[Table("Preoperatorios")]
 public partial class Preoperatorio
 {
     [Key]

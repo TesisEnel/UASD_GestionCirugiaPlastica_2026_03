@@ -49,12 +49,15 @@
             <button class="@TabClass("clinico")" @onclick='() => _tab = "clinico"'>Historial clínico</button>
             <button class="@TabClass("timeline")" @onclick='() => _tab = "timeline"'>Cronología</button>
             <button class="@TabClass("consultas")" @onclick='() => _tab = "consultas"'>Consultas</button>
-            <button class="@TabClass("preoperatorio")" @onclick='() => _tab = "preoperatorio"'>Evaluación preoperatoria</button>
-            <button class="@TabClass("postoperatorio")" @onclick='() => _tab = "postoperatorio"'>Seguimiento</button>
             <button class="@TabClass("recetas")" @onclick='() => _tab = "recetas"'>Recetas</button>
             <button class="@TabClass("documentos")" @onclick='() => _tab = "documentos"'>Estudios y documentos</button>
             <button class="@TabClass("citas")" @onclick='() => _tab = "citas"'>Citas y pagos</button>
             <button class="expediente-secondary" @onclick="Imprimir">Imprimir / Guardar PDF</button>
+            }
+            @if (_esClinico)
+            {
+                <button class="@TabClass("preoperatorio")" @onclick='() => _tab = "preoperatorio"'>Evaluación preoperatoria</button>
+                <button class="@TabClass("postoperatorio")" @onclick='() => _tab = "postoperatorio"'>Seguimiento</button>
             }
             <button class="@TabClass("operaciones")" @onclick='() => _tab = "operaciones"'>Cirugías y fotografías</button>
         </div>
@@ -127,13 +130,70 @@
         {
             <section class="expediente-card"><h2>Consultas y diagnósticos</h2>@if (_expediente.Consultas.Count == 0) { <p>No hay consultas registradas.</p> }@foreach (var c in _expediente.Consultas) { <article class="record-card"><time>@c.Fecha.ToString("dd/MM/yyyy HH:mm")</time><h3>@(c.Motivo ?? "Consulta")</h3><p><b>Diagnóstico:</b> @(c.Diagnostico ?? "—")</p><p>@(c.Observaciones ?? "")</p></article> }</section>
         }
-        else if (_tab == "preoperatorio" && _esDoctora)
+        else if (_tab == "preoperatorio" && _esClinico)
         {
-            <section class="expediente-card"><h2>Evaluaciones preoperatorias</h2>@if (_expediente.Preoperatorios.Count == 0) { <p>No hay evaluaciones registradas.</p> }@foreach (var p in _expediente.Preoperatorios) { <article class="record-card"><time>@p.FechaEvaluacion.ToString("dd/MM/yyyy") · Cirugía #@p.CirugiaId</time><p><b>Laboratorio anotado:</b> @(p.AnalisisLaboratorio ?? "—")</p><p><b>Cardiológica:</b> @(p.EvaluacionCardiologica ?? "—")</p><p><b>Anestésica:</b> @(p.EvaluacionAnestesica ?? "—")</p><p>Autorizado: @(p.Autorizado ? "Sí" : "No") · @p.Observaciones</p></article> }</section>
+            <section class="expediente-card">
+                <h2>Evaluaciones preoperatorias</h2>
+                @if (_expediente.Operaciones.Count == 0) { <p>Registra primero una cirugía para vincular una evaluación preoperatoria.</p> }
+                else
+                {
+                    <EditForm Model="_preoperatorioForm" OnValidSubmit="GuardarPreoperatorioAsync">
+                        <div class="expediente-grid">
+                            <label>Cirugía relacionada
+                                <InputSelect @bind-Value="_preoperatorioForm.CirugiaId">
+                                    @foreach (var op in _expediente.Operaciones) { <option value="@op.CirugiaId">@op.Procedimiento · @op.FechaCirugia.ToString("dd/MM/yyyy")</option> }
+                                </InputSelect>
+                            </label>
+                            <label>Análisis de laboratorio<InputTextArea @bind-Value="_preoperatorioForm.AnalisisLaboratorio" /></label>
+                            <label>Evaluación cardiológica<InputTextArea @bind-Value="_preoperatorioForm.EvaluacionCardiologica" /></label>
+                            <label>Evaluación anestésica<InputTextArea @bind-Value="_preoperatorioForm.EvaluacionAnestesica" /></label>
+                            <label>Observaciones<InputTextArea @bind-Value="_preoperatorioForm.Observaciones" /></label>
+                            <label class="expediente-check"><InputCheckbox @bind-Value="_preoperatorioForm.Autorizado" /> Marcar como autorizado</label>
+                        </div>
+                        @if (_preoperatorioForm.Autorizado) { <p class="expediente-muted">Para autorizar, completa laboratorio, evaluación cardiológica y anestésica.</p> }
+                        <button class="expediente-action" type="submit" disabled="@_guardandoSeguimiento">Guardar evaluación</button>
+                    </EditForm>
+                }
+                @if (_expediente.Preoperatorios.Count == 0) { <p>No hay evaluaciones registradas.</p> }
+                @foreach (var p in _expediente.Preoperatorios.OrderByDescending(x => x.FechaEvaluacion))
+                {
+                    <article class="record-card"><time>@p.FechaEvaluacion.ToString("dd/MM/yyyy HH:mm") · @NombreOperacion(p.CirugiaId)</time><p><b>Laboratorio:</b> @(p.AnalisisLaboratorio ?? "—")</p><p><b>Cardiológica:</b> @(p.EvaluacionCardiologica ?? "—")</p><p><b>Anestésica:</b> @(p.EvaluacionAnestesica ?? "—")</p><p><b>Autorización:</b> @(p.Autorizado ? "Autorizado" : "Pendiente") · @(p.Observaciones ?? "Sin observaciones")</p></article>
+                }
+                @if (_status is not null) { <p role="status">@_status</p> }
+            </section>
         }
-        else if (_tab == "postoperatorio" && _esDoctora)
+        else if (_tab == "postoperatorio" && _esClinico)
         {
-            <section class="expediente-card"><h2>Evolución postoperatoria</h2>@if (_expediente.Controles.Count == 0) { <p>No hay controles registrados.</p> }@foreach (var c in _expediente.Controles) { <article class="record-card"><time>@c.Fecha.ToString("dd/MM/yyyy") · Día postoperatorio @c.DiasPostoperatorio · Cirugía #@c.CirugiaId</time><p>@c.Evolucion</p><p>Dolor: @(c.Dolor ?? "—") · Inflamación: @(c.Inflamacion ?? "—")</p><p>@c.Observaciones</p><p>Próximo control: @(c.ProximoControl?.ToString("dd/MM/yyyy") ?? "—")</p></article> }</section>
+            <section class="expediente-card">
+                <h2>Controles postoperatorios</h2>
+                @if (_expediente.Operaciones.Count == 0) { <p>Registra primero una cirugía para vincular un control postoperatorio.</p> }
+                else
+                {
+                    <EditForm Model="_controlForm" OnValidSubmit="GuardarControlAsync">
+                        <div class="expediente-grid">
+                            <label>Cirugía relacionada
+                                <InputSelect @bind-Value="_controlForm.CirugiaId">
+                                    @foreach (var op in _expediente.Operaciones) { <option value="@op.CirugiaId">@op.Procedimiento · @op.FechaCirugia.ToString("dd/MM/yyyy")</option> }
+                                </InputSelect>
+                            </label>
+                            <label>Fecha del control<InputDate @bind-Value="_controlForm.Fecha" /></label>
+                            <label>Días postoperatorios<InputNumber @bind-Value="_controlForm.DiasPostoperatorio" min="0" /></label>
+                            <label>Evolución<InputTextArea @bind-Value="_controlForm.Evolucion" /></label>
+                            <label>Dolor<InputText @bind-Value="_controlForm.Dolor" maxlength="250" /></label>
+                            <label>Inflamación<InputText @bind-Value="_controlForm.Inflamacion" maxlength="250" /></label>
+                            <label>Observaciones<InputTextArea @bind-Value="_controlForm.Observaciones" /></label>
+                            <label>Próximo control<InputDate TValue="DateTime?" @bind-Value="_controlForm.ProximoControl" /></label>
+                        </div>
+                        <button class="expediente-action" type="submit" disabled="@_guardandoSeguimiento">Guardar control</button>
+                    </EditForm>
+                }
+                @if (_expediente.Controles.Count == 0) { <p>No hay controles registrados.</p> }
+                @foreach (var c in _expediente.Controles.OrderByDescending(x => x.Fecha))
+                {
+                    <article class="record-card"><time>@c.Fecha.ToString("dd/MM/yyyy HH:mm") · Día postoperatorio @c.DiasPostoperatorio · @NombreOperacion(c.CirugiaId)</time><p><b>Evolución:</b> @c.Evolucion</p><p><b>Dolor:</b> @(c.Dolor ?? "—") · <b>Inflamación:</b> @(c.Inflamacion ?? "—")</p><p>@(c.Observaciones ?? "Sin observaciones")</p><p>Próximo control: @(c.ProximoControl?.ToString("dd/MM/yyyy") ?? "—")</p></article>
+                }
+                @if (_status is not null) { <p role="status">@_status</p> }
+            </section>
         }
         else if (_tab == "recetas" && _esDoctora)
         {
@@ -214,11 +274,15 @@
     private ExpedienteDto? _expediente;
     private bool _loading = true;
     private bool _esDoctora;
+    private bool _esClinico;
+    private bool _guardandoSeguimiento;
     private string? _error;
     private string? _status;
     private string _tab = "personal";
     private string _busqueda = "";
     private CirugiaForm _cirugiaForm = new();
+    private PreoperatorioForm _preoperatorioForm = new();
+    private ControlForm _controlForm = new();
     private List<ProcedimientoDto> _procedimientos = new();
     private HistorialDto _historial = new();
     private string _categoriaDocumento = "Laboratorio";
@@ -241,6 +305,7 @@
     {
         var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         _esDoctora = auth.User.IsInRole("Doctora");
+        _esClinico = _esDoctora || auth.User.IsInRole("AsistenteClinico");
         if (!_esDoctora) _tab = "operaciones";
         _loading = true;
         _busqueda = Criterio ?? "";
@@ -256,6 +321,7 @@
             await CargarExpedienteAsync();
             _error = null;
             await CargarProcedimientosAsync();
+            await CargarSeguimientoAsync();
         }
         catch (HttpRequestException) { _error = "No se pudo cargar el expediente."; }
         catch (System.Text.Json.JsonException) { _error = "La respuesta del servidor no tiene el formato esperado."; }
@@ -283,6 +349,82 @@
             var bytes = await response.Content.ReadAsByteArrayAsync();
             foto.DataUri = $"data:{response.Content.Headers.ContentType?.MediaType ?? "image/jpeg"};base64,{Convert.ToBase64String(bytes)}";
         }
+    }
+
+    private async Task CargarSeguimientoAsync()
+    {
+        if (_expediente is null) return;
+        var cirugiasIds = _expediente.Operaciones.Select(o => o.CirugiaId).ToHashSet();
+        if (cirugiasIds.Count == 0)
+        {
+            _expediente.Preoperatorios.Clear();
+            _expediente.Controles.Clear();
+            return;
+        }
+
+        var preoperatoriosTask = Http.GetFromJsonAsync<Envelope<List<PreoperatorioDto>>>("api/Preoperatorios");
+        var controlesTask = Http.GetFromJsonAsync<Envelope<List<ControlDto>>>("api/ControlesPostoperatorios");
+        await Task.WhenAll(preoperatoriosTask, controlesTask);
+        _expediente.Preoperatorios = (await preoperatoriosTask)?.Value?.Where(p => cirugiasIds.Contains(p.CirugiaId)).ToList() ?? new();
+        _expediente.Controles = (await controlesTask)?.Value?.Where(c => cirugiasIds.Contains(c.CirugiaId)).ToList() ?? new();
+
+        var primeraCirugiaId = _expediente.Operaciones.OrderByDescending(o => o.FechaCirugia).First().CirugiaId;
+        if (_preoperatorioForm.CirugiaId == 0) _preoperatorioForm.CirugiaId = primeraCirugiaId;
+        if (_controlForm.CirugiaId == 0) _controlForm.CirugiaId = primeraCirugiaId;
+    }
+
+    private string NombreOperacion(int cirugiaId) => _expediente?.Operaciones.FirstOrDefault(o => o.CirugiaId == cirugiaId) is { } op
+        ? $"{op.Procedimiento} · {op.FechaCirugia:dd/MM/yyyy}"
+        : $"Cirugía #{cirugiaId}";
+
+    private async Task GuardarPreoperatorioAsync()
+    {
+        if (_expediente is null) return;
+        if (_preoperatorioForm.CirugiaId <= 0) { _status = "Selecciona una cirugía para la evaluación."; return; }
+        if (_preoperatorioForm.Autorizado && (string.IsNullOrWhiteSpace(_preoperatorioForm.AnalisisLaboratorio)
+            || string.IsNullOrWhiteSpace(_preoperatorioForm.EvaluacionCardiologica)
+            || string.IsNullOrWhiteSpace(_preoperatorioForm.EvaluacionAnestesica)))
+        {
+            _status = "Completa laboratorio, cardiología y anestesia antes de marcar la evaluación como autorizada.";
+            return;
+        }
+
+        _guardandoSeguimiento = true;
+        try
+        {
+            using var response = await Http.PostAsJsonAsync("api/Preoperatorios", _preoperatorioForm);
+            _status = response.IsSuccessStatusCode ? "Evaluación preoperatoria guardada." : await ErrorResponse(response);
+            if (response.IsSuccessStatusCode)
+            {
+                var cirugiaId = _preoperatorioForm.CirugiaId;
+                _preoperatorioForm = new PreoperatorioForm { CirugiaId = cirugiaId };
+                await CargarSeguimientoAsync();
+            }
+        }
+        catch (HttpRequestException) { _status = "No se pudo conectar con la API para guardar la evaluación."; }
+        finally { _guardandoSeguimiento = false; }
+    }
+
+    private async Task GuardarControlAsync()
+    {
+        if (_expediente is null) return;
+        if (_controlForm.CirugiaId <= 0) { _status = "Selecciona una cirugía para el control."; return; }
+        if (string.IsNullOrWhiteSpace(_controlForm.Evolucion)) { _status = "Describe la evolución del paciente."; return; }
+
+        _guardandoSeguimiento = true;
+        try
+        {
+            using var response = await Http.PostAsJsonAsync("api/ControlesPostoperatorios", _controlForm);
+            _status = response.IsSuccessStatusCode ? "Control postoperatorio guardado." : await ErrorResponse(response);
+            if (response.IsSuccessStatusCode)
+            {
+                var cirugiaId = _controlForm.CirugiaId;
+                _controlForm = new ControlForm { CirugiaId = cirugiaId, Fecha = DateTime.Today };
+                await CargarSeguimientoAsync();
+            }
+        }
+        catch (HttpRequestException) { _status = "No se pudo conectar con la API para guardar el control."; }
+        finally { _guardandoSeguimiento = false; }
     }
 
     private async Task GuardarHistorialAsync()
@@ -389,6 +531,7 @@
         {
             _cirugiaForm = new CirugiaForm { PacienteId = _expediente!.Paciente.PacienteId };
             await CargarExpedienteAsync();
+            await CargarSeguimientoAsync();
         }
     }
 
@@ -396,8 +539,8 @@
     private sealed class HistorialDto { public int HistoriaId { get; set; } public int PacienteId { get; set; } public DateTime FechaActualizacion { get; set; } public string? Antecedentes { get; set; } public string? AntecedentesPersonales { get; set; } public string? AntecedentesFamiliares { get; set; } public string? Alergias { get; set; } public string? Medicamentos { get; set; } public string? NotasMedicas { get; set; } }
     private sealed record TimelineDto(DateTime Fecha, string Tipo, string Detalle);
     private sealed class ConsultaDto { public int ConsultaId { get; set; } public DateTime Fecha { get; set; } public string? Motivo { get; set; } public string? Diagnostico { get; set; } public string? Observaciones { get; set; } }
-    private sealed class PreoperatorioDto { public int CirugiaId { get; set; } public DateTime FechaEvaluacion { get; set; } public string? AnalisisLaboratorio { get; set; } public string? EvaluacionCardiologica { get; set; } public string? EvaluacionAnestesica { get; set; } public bool Autorizado { get; set; } public string? Observaciones { get; set; } }
-    private sealed class ControlDto { public int CirugiaId { get; set; } public DateTime Fecha { get; set; } public int DiasPostoperatorio { get; set; } public string Evolucion { get; set; } = ""; public string? Dolor { get; set; } public string? Inflamacion { get; set; } public string? Observaciones { get; set; } public DateTime? ProximoControl { get; set; } }
+    private sealed class PreoperatorioDto { public int PreoperatorioId { get; set; } public int CirugiaId { get; set; } public DateTime FechaEvaluacion { get; set; } public string? AnalisisLaboratorio { get; set; } public string? EvaluacionCardiologica { get; set; } public string? EvaluacionAnestesica { get; set; } public bool Autorizado { get; set; } public string? Observaciones { get; set; } }
+    private sealed class ControlDto { public int ControlId { get; set; } public int CirugiaId { get; set; } public DateTime Fecha { get; set; } public int? DiasPostoperatorio { get; set; } public string? Evolucion { get; set; } public string? Dolor { get; set; } public string? Inflamacion { get; set; } public string? Observaciones { get; set; } public DateTime? ProximoControl { get; set; } }
     private sealed class RecetaDto { public DateTime Fecha { get; set; } public string? Indicaciones { get; set; } public List<DetalleRecetaDto> Detalles { get; set; } = new(); }
     private sealed class DetalleRecetaDto { public string Medicamento { get; set; } = ""; public string? Dosis { get; set; } public string? Frecuencia { get; set; } public string? Duracion { get; set; } public string? Instrucciones { get; set; } }
     private sealed class PagoDto { public DateTime Fecha { get; set; } public decimal Monto { get; set; } public string? MetodoPago { get; set; } public string? Concepto { get; set; } }
@@ -411,4 +554,7 @@
     private sealed class FotoDto { public int FotografiaId { get; set; } public int CirugiaId { get; set; } public DateTime Fecha { get; set; } public string? Tipo { get; set; } public string? Descripcion { get; set; } public string? DataUri { get; set; } }
     private sealed class ProcedimientoDto { public int ProcedimientoId { get; set; } public string Nombre { get; set; } = ""; }
     private sealed class CirugiaForm { public int CirugiaId { get; set; } public DateTime FechaCirugia { get; set; } = DateTime.Today; public int PacienteId { get; set; } public int ProcedimientoId { get; set; } public string? DiagnosticoPreoperatorio { get; set; } public string Estado { get; set; } = "Pendiente"; public string? Observaciones { get; set; } }
+    private sealed class Envelope<T> { public T? Value { get; set; } }
+    private sealed class PreoperatorioForm { public int CirugiaId { get; set; } public string? AnalisisLaboratorio { get; set; } public string? EvaluacionCardiologica { get; set; } public string? EvaluacionAnestesica { get; set; } public bool Autorizado { get; set; } public string? Observaciones { get; set; } }
+    private sealed class ControlForm { public DateTime Fecha { get; set; } = DateTime.Today; public int CirugiaId { get; set; } public int? DiasPostoperatorio { get; set; } = 0; public string? Evolucion { get; set; } public string? Dolor { get; set; } public string? Inflamacion { get; set; } public string? Observaciones { get; set; } public DateTime? ProximoControl { get; set; } }
 }

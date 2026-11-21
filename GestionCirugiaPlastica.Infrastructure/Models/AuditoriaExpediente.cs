@@ -6,7 +6,7 @@ namespace GestionCirugiaPlastica.Infrastructure.Models;
 [Table("AuditoriaExpediente")]
 public class AuditoriaExpediente
 {
-    [Key]
+    [Key, Column(TypeName = "bigint")]
     public long AuditoriaExpedienteId { get; set; }
     public int PacienteId { get; set; }
     public int UsuarioId { get; set; }

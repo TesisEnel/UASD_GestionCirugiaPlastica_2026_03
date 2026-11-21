@@ -256,6 +256,36 @@ code {
 .insurance-actions { display:flex; flex-wrap:wrap; gap:7px; }
 .insurance-actions .med-secondary,.insurance-actions .med-primary { margin:0; padding:7px 10px; font-size:12px; }
 .insurance-note { margin:14px 0 0; color:#777273; font-size:13px; }
+.insurance-expiry-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.insurance-alert { padding:16px; border:1px solid #F0ECEE; border-radius:12px; background:#fff; }
+.insurance-alert h2 { display:flex; align-items:center; justify-content:space-between; margin:0 0 10px; font-size:16px; }
+.insurance-alert h2 span { display:inline-grid; place-items:center; min-width:26px; height:26px; padding:0 7px; border-radius:20px; font-size:12px; }
+.insurance-alert p { margin:7px 0 0; color:#62595C; font-size:13px; }
+.insurance-alert-danger { border-color:#E9C6C6; background:#FFF7F7; }
+.insurance-alert-danger h2,.insurance-alert-danger h2 span { color:#8C3131; }
+.insurance-alert-danger h2 span { background:#FBE9E9; }
+.insurance-alert-warning { border-color:#EAD8B7; background:#FFFBF2; }
+.insurance-alert-warning h2,.insurance-alert-warning h2 span { color:#8B6828; }
+.insurance-alert-warning h2 span { background:#FFF1D4; }
+.payment-policy-warning { grid-column:1/-1; }
+.payment-policy-soon { padding:10px 12px; border-radius:8px; background:#FFF4DF; color:#8B6828; font-size:13px; }
+.surgery-header-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.receta-card[role="button"] { cursor:pointer; }
+.receta-card[role="button"]:focus-visible { outline:3px solid #C67C8E; outline-offset:3px; }
+.receta-detail-overlay { position:fixed; inset:0; z-index:1100; display:flex; align-items:center; justify-content:center; padding:20px; background:rgba(30,24,27,.58); }
+.receta-detail-modal { width:min(760px,100%); max-height:90vh; overflow:auto; }
+.receta-detail-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:18px; }
+.receta-detail-heading h2 { margin:5px 0 0; }
+.receta-patient-details,.receta-drugs-detail dl { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:0 0 18px; }
+.receta-patient-details div,.receta-drugs-detail dl div { padding:10px; border-radius:8px; background:#FCF8F9; }
+.receta-patient-details dt,.receta-drugs-detail dt { color:#777273; font-size:12px; }
+.receta-patient-details dd,.receta-drugs-detail dd { margin:3px 0 0; color:#36383A; }
+.receta-full-instructions { white-space:pre-wrap; }
+.receta-drugs-detail { display:grid; grid-template-columns:1fr; }
+.receta-drugs-detail article { padding:14px; border:1px solid #F0ECEE; border-radius:10px; }
+.receta-detail-modal footer { display:flex; justify-content:flex-end; margin-top:16px; }
+@media(max-width:600px) { .receta-patient-details,.receta-drugs-detail dl { grid-template-columns:1fr; } .receta-detail-overlay { padding:10px; } }
+@media(max-width:760px) { .insurance-expiry-grid { grid-template-columns:1fr; } }
 .patient-home-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
 .patient-home-summary { display:flex; align-items:flex-start; gap:14px; min-height:150px; }
 .patient-home-icon { display:flex; width:44px; height:44px; min-width:44px; align-items:center; justify-content:center; border-radius:12px; background:#F8E9ED; color:#9E6E79; font-size:19px; }

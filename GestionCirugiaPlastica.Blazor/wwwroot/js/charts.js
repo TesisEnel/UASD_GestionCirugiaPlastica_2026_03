@@ -2,7 +2,7 @@
 // Administrador de gráficas del dashboard
 
 // Gráfica circular de ingresos
-export function createRevenueChart() {
+export function createRevenueChart(values = [0, 0, 0]) {
     const canvas = document.getElementById("revenueChart");
 
     if (!canvas) return;
@@ -15,7 +15,7 @@ export function createRevenueChart() {
         data: {
             labels: ["Otros ingresos", "Consultas", "Cirugías"],
             datasets: [{
-                data: [45000, 85000, 400000],
+            data: values,
                 backgroundColor: ["#9E9A9B", "#C67C8E", "#9E6E79"],
                 borderWidth: 0,
                 hoverOffset: 8
@@ -41,7 +41,7 @@ export function createRevenueChart() {
 }
 
 // Gráfica de distribución de pacientes
-export function createPatientsChart() {
+export function createPatientsChart(values = [0, 0]) {
     const canvas = document.getElementById("patientsChart");
 
     if (!canvas) return;
@@ -54,7 +54,7 @@ export function createPatientsChart() {
         data: {
             labels: ["Masculino", "Femenino"],
             datasets: [{
-                data: [35, 65],
+            data: values,
                 backgroundColor: ["#9E9A9B", "#C67C8E"],
                 borderWidth: 0
             }]
@@ -71,7 +71,7 @@ export function createPatientsChart() {
 }
 
 // Gráfica de actividad del consultorio
-export function createActivityChart() {
+export function createActivityChart(labels = [], values = []) {
     const canvas = document.getElementById("activityChart");
 
     if (!canvas) return;
@@ -82,21 +82,14 @@ export function createActivityChart() {
     new Chart(canvas, {
         type: "line",
         data: {
-            labels: ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"],
+            labels,
             datasets: [
                 {
-                    label: "En línea",
-                    data: [12, 19, 15, 22, 18, 25, 20],
+                    label: "Citas",
+                    data: values,
                     borderColor: "#9E6E79",
                     backgroundColor: "rgba(158, 110, 121, 0.12)",
                     fill: true,
-                    tension: 0.4
-                },
-                {
-                    label: "Fuera de línea",
-                    data: [4, 6, 5, 7, 4, 8, 6],
-                    borderColor: "#9E9A9B",
-                    backgroundColor: "transparent",
                     tension: 0.4
                 }
             ]

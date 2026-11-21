@@ -9,6 +9,7 @@
     <File Path="Scrip/RegistroPerfilUsuarios.sql" />
     <File Path="Scrip/SemillaExpedienteDemo.sql" />
     <File Path="Scrip/ActualizarExpedienteClinico.sql" />
+    <File Path="Scrip/SincronizarEsquemaCompleto.sql" />
   </Folder>
   <Folder Name="/Solution Items/">
     <File Path=".gitignore" />

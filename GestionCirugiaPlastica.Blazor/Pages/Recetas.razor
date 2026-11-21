@@ -20,7 +20,7 @@
             <h2>@(_form.RecetaId == 0 ? "Nueva receta" : "Editar receta")</h2>
             <EditForm Model="_form" OnValidSubmit="GuardarAsync">
                 <div class="med-grid">
-                    <label>Paciente<select @bind="_form.PacienteId"><option value="0">Selecciona paciente</option>@foreach (var p in _pacientes) { <option value="@p.PacienteId">@p.Nombre @p.Apellido</option> }</select></label>
+                    <label>Paciente<select class="form-select" value="@_form.PacienteId" @onchange="CambiarPaciente"><option value="0">-- Selecciona un paciente --</option>@foreach (var p in _pacientes) { <option value="@p.PacienteId">@p.Nombre @p.Apellido</option> }</select></label>
                     <label>Fecha<InputDate @bind-Value="_form.Fecha" /></label>
                     <label class="med-span">Indicaciones médicas / postoperatorias<InputTextArea @bind-Value="_form.Indicaciones" /></label>
                 </div>
@@ -45,8 +45,8 @@
 
     @foreach (var receta in RecetasVisibles)
     {
-        <article class="med-card receta-card">
-            <header><div><span>@receta.Fecha.ToString("dd/MM/yyyy")</span><h2>@NombrePaciente(receta.PacienteId)</h2></div><button class="med-secondary" @onclick="() => Editar(receta)">Editar receta</button></header>
+        <article class="med-card receta-card" role="button" tabindex="0" @onclick="() => AbrirDetalleAsync(receta)" @onkeydown="e => AbrirDetalleConTeclaAsync(receta, e)">
+            <header><div><span>@receta.Fecha.ToString("dd/MM/yyyy")</span><h2>@NombrePaciente(receta.PacienteId)</h2></div><button class="med-secondary" @onclick="() => Editar(receta)" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">Editar receta</button></header>
             <p>@receta.Indicaciones</p>
             <div class="receta-drugs">
                 @foreach (var d in receta.DetallesReceta) { <div><strong>@d.Medicamento</strong><span>@d.Dosis · @d.Frecuencia · @d.Duracion</span><small>@d.Instrucciones</small></div> }
@@ -56,10 +56,54 @@
     @if (_recetas.Count == 0) { <section class="med-card">Todavía no hay recetas registradas.</section> }
 </div>
 
+@if (_detalle is not null)
+{
+    <div class="receta-detail-overlay" role="presentation" @onclick="CerrarDetalle">
+        <section class="med-card receta-detail-modal" role="dialog" aria-modal="true" aria-labelledby="recipe-detail-title" @onclick:stopPropagation="true">
+            <header class="receta-detail-heading">
+                <div><span>Receta · @_detalle.Fecha.ToString("dd/MM/yyyy")</span><h2 id="recipe-detail-title">Detalle de la receta</h2></div>
+                <button type="button" class="med-secondary" @onclick="CerrarDetalle">Cerrar</button>
+            </header>
+            @if (_cargandoDetalle) { <p>Cargando receta completa…</p> }
+            @if (_detalleError is not null) { <div class="med-error" role="alert">@_detalleError</div> }
+            <h3>Paciente</h3>
+            <dl class="receta-patient-details">
+                <div><dt>Nombre</dt><dd>@(_pacienteDetalle is null ? NombrePaciente(_detalle.PacienteId) : $"{_pacienteDetalle.Nombre} {_pacienteDetalle.Apellido}")</dd></div>
+                <div><dt>Cédula</dt><dd>@(_pacienteDetalle?.Cedula ?? "—")</dd></div>
+                <div><dt>Teléfono</dt><dd>@(_pacienteDetalle?.Telefono ?? "—")</dd></div>
+                <div><dt>Correo</dt><dd>@(_pacienteDetalle?.Email ?? "—")</dd></div>
+                <div><dt>Fecha de nacimiento</dt><dd>@(_pacienteDetalle?.FechaNacimiento?.ToString("dd/MM/yyyy") ?? "—")</dd></div>
+                <div><dt>Género</dt><dd>@(_pacienteDetalle?.Sexo ?? "—")</dd></div>
+                <div><dt>Seguro médico</dt><dd>@(_pacienteDetalle?.TieneSeguro is bool tieneSeguro ? tieneSeguro ? "Tiene seguro" : "Sin seguro" : "—")</dd></div>
+                <div><dt>Dirección</dt><dd>@(_pacienteDetalle?.Direccion ?? "—")</dd></div>
+            </dl>
+            <h3>Diagnóstico asociado</h3>
+            <p>@(_diagnosticoDetalle ?? "No hay diagnóstico asociado a esta receta.")</p>
+            @if (_detalle.CirugiaId is int cirugiaId) { <p>Cirugía relacionada: #@cirugiaId</p> }
+            @if (_detalle.ConsultaId is int consultaId) { <p>Consulta relacionada: #@consultaId</p> }
+            <h3>Indicaciones médicas / postoperatorias</h3>
+            <p class="receta-full-instructions">@(_detalle.Indicaciones ?? "Sin indicaciones registradas.")</p>
+            <h3>Medicamentos</h3>
+            @if (_detalle.DetallesReceta.Count == 0) { <p>Esta receta no tiene medicamentos detallados.</p> }
+            <div class="receta-drugs receta-drugs-detail">
+                @foreach (var d in _detalle.DetallesReceta)
+                {
+                    <article><strong>@d.Medicamento</strong><dl><div><dt>Dosis</dt><dd>@(d.Dosis ?? "—")</dd></div><div><dt>Frecuencia</dt><dd>@(d.Frecuencia ?? "—")</dd></div><div><dt>Duración</dt><dd>@(d.Duracion ?? "—")</dd></div><div><dt>Instrucciones</dt><dd>@(d.Instrucciones ?? "—")</dd></div></dl></article>
+                }
+            </div>
+            <footer><button type="button" class="med-primary" @onclick="EditarDetalle">Editar receta</button></footer>
+        </section>
+    </div>
+}
+
 @code {
     private List<RecetaDto> _recetas = new();
     private List<PacienteDto> _pacientes = new();
     private RecetaForm? _form;
+    private RecetaDto? _detalle;
+    private PacienteDetalleDto? _pacienteDetalle;
+    private string? _diagnosticoDetalle, _detalleError;
+    private bool _cargandoDetalle;
     private string _buscar = "";
     private int _pacienteFiltro;
     private string? _error, _formError;
@@ -80,8 +124,46 @@
     }
 
     private string NombrePaciente(int id) { var p = _pacientes.FirstOrDefault(x => x.PacienteId == id); return p is null ? $"Paciente #{id}" : $"{p.Nombre} {p.Apellido}"; }
+    private void CambiarPaciente(ChangeEventArgs args) => _form!.PacienteId = int.TryParse(args.Value?.ToString(), out var pacienteId) ? pacienteId : 0;
     private void Nueva() { _formError = null; _form = new RecetaForm { Fecha = DateTime.Today, DetallesReceta = [new()] }; }
     private void Editar(RecetaDto receta) => _form = new RecetaForm { RecetaId = receta.RecetaId, PacienteId = receta.PacienteId, Fecha = receta.Fecha, Indicaciones = receta.Indicaciones, ConsultaId = receta.ConsultaId, CirugiaId = receta.CirugiaId, DetallesReceta = receta.DetallesReceta.Select(d => new DetalleForm { DetalleRecetaId = d.DetalleRecetaId, Medicamento = d.Medicamento, Dosis = d.Dosis, Frecuencia = d.Frecuencia, Duracion = d.Duracion, Instrucciones = d.Instrucciones }).ToList() };
+    private void CerrarDetalle() { _detalle = null; _detalleError = null; }
+    private void EditarDetalle() { if (_detalle is null) return; var selected = _detalle; CerrarDetalle(); Editar(selected); }
+    private async Task AbrirDetalleConTeclaAsync(RecetaDto receta, KeyboardEventArgs args)
+    {
+        if (args.Key is "Enter" or " ") await AbrirDetalleAsync(receta);
+    }
+
+    private async Task AbrirDetalleAsync(RecetaDto receta)
+    {
+        _detalle = receta;
+        _pacienteDetalle = null;
+        _diagnosticoDetalle = null;
+        _detalleError = null;
+        _cargandoDetalle = true;
+        try
+        {
+            var recetaResult = await Http.GetFromJsonAsync<Envelope<RecetaDto>>($"api/Recetas/{receta.RecetaId}");
+            _detalle = recetaResult?.Value ?? receta;
+            var expediente = await Http.GetFromJsonAsync<ExpedienteDetalleResponse>($"api/Pacientes/expediente/{_detalle.PacienteId}");
+            _pacienteDetalle = expediente?.Paciente;
+            if (_detalle.ConsultaId is int consultaId)
+            {
+                var consulta = await Http.GetFromJsonAsync<Envelope<ConsultaDetalleDto>>($"api/Consultas/{consultaId}");
+                _diagnosticoDetalle = consulta?.Value?.Diagnostico;
+            }
+            if (string.IsNullOrWhiteSpace(_diagnosticoDetalle) && _detalle.CirugiaId is int cirugiaId)
+            {
+                var cirugia = await Http.GetFromJsonAsync<Envelope<CirugiaDetalleDto>>($"api/Cirugias/{cirugiaId}");
+                _diagnosticoDetalle = cirugia?.Value?.DiagnosticoPreoperatorio;
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            _detalleError = "No se pudo cargar toda la información relacionada con esta receta.";
+        }
+        finally { _cargandoDetalle = false; }
+    }
     private void AgregarMedicamento() => _form?.DetallesReceta.Add(new());
     private void Cancelar() { _form = null; _formError = null; }
 
@@ -90,11 +172,11 @@
         if (_form is null) return;
         if (_form.PacienteId <= 0 || _form.DetallesReceta.Count == 0 || _form.DetallesReceta.Any(d => string.IsNullOrWhiteSpace(d.Medicamento))) { _formError = "Selecciona un paciente e ingresa al menos un medicamento."; return; }
         _saving = true; _formError = null;
-        var request = new { _form.RecetaId, _form.Fecha, _form.PacienteId, _form.ConsultaId, _form.CirugiaId, _form.Indicaciones, DetallesReceta = _form.DetallesReceta };
+            var request = new { _form.RecetaId, _form.Fecha, _form.PacienteId, _form.ConsultaId, _form.CirugiaId, _form.Indicaciones, DetallesReceta = _form.DetallesReceta.Select(d => new { d.DetalleRecetaId, d.Medicamento, d.Dosis, d.Frecuencia, d.Duracion, d.Instrucciones }).ToList() };
         try
         {
             using var response = await Http.PostAsJsonAsync("api/Recetas", request);
-            if (!response.IsSuccessStatusCode) { _formError = "No se pudo guardar la receta. Revisa el paciente, las indicaciones y los medicamentos."; return; }
+            if (!response.IsSuccessStatusCode) { var detail = await response.Content.ReadAsStringAsync(); _formError = $"Error {(int)response.StatusCode} al guardar la receta: {detail}"; return; }
             _form = null;
             _recetas = (await Http.GetFromJsonAsync<Envelope<List<RecetaDto>>>("api/Recetas"))?.Value ?? new();
         }
@@ -103,6 +185,10 @@
     }
 
     private sealed class Envelope<T> { public T? Value { get; set; } }
+    private sealed class ExpedienteDetalleResponse { public PacienteDetalleDto? Paciente { get; set; } }
+    private sealed class PacienteDetalleDto { public string Nombre { get; set; } = ""; public string Apellido { get; set; } = ""; public string? Cedula { get; set; } public string? Telefono { get; set; } public string? Email { get; set; } public DateOnly? FechaNacimiento { get; set; } public string? Sexo { get; set; } public bool? TieneSeguro { get; set; } public string? Direccion { get; set; } }
+    private sealed class ConsultaDetalleDto { public string? Diagnostico { get; set; } }
+    private sealed class CirugiaDetalleDto { public string? DiagnosticoPreoperatorio { get; set; } }
     private sealed class PacienteDto { public int PacienteId { get; set; } public string Nombre { get; set; } = ""; public string Apellido { get; set; } = ""; }
     private sealed class RecetaDto { public int RecetaId { get; set; } public DateTime Fecha { get; set; } public int PacienteId { get; set; } public int? ConsultaId { get; set; } public int? CirugiaId { get; set; } public string? Indicaciones { get; set; } public List<DetalleDto> DetallesReceta { get; set; } = new(); }
     private sealed class DetalleDto { public int DetalleRecetaId { get; set; } public string Medicamento { get; set; } = ""; public string? Dosis { get; set; } public string? Frecuencia { get; set; } public string? Duracion { get; set; } public string? Instrucciones { get; set; } }

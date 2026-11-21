@@ -26,6 +26,11 @@ public class PacientesController(
         if (id != paciente.PacienteId)
             return BadRequest("El ID de la ruta no coincide con el ID del paciente.");
 
+        // Los campos opcionales pueden llegar como cadena vacía desde formularios HTML.
+        // Normalizarlos evita validaciones y búsquedas de duplicados sobre valores vacíos.
+        paciente.Cedula = string.IsNullOrWhiteSpace(paciente.Cedula) ? null : paciente.Cedula.Trim();
+        paciente.Sexo = string.IsNullOrWhiteSpace(paciente.Sexo) ? null : paciente.Sexo.Trim();
+
         var resultado = await pacientesService.Guardar(paciente);
         return resultado.IsSuccess ? Ok(resultado) : BadRequest(resultado);
     }

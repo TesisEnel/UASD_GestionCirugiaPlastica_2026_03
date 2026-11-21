@@ -1,5 +1,6 @@
 
 @page "/citas"
+@page "/agenda"
 @attribute [Authorize(Roles = "Doctora,Secretaria")]
 @using System.Net.Http.Json
 @using System.Globalization
@@ -83,8 +84,8 @@
                 }
                 else
                 {
-                    <select class="form-select" @bind="NewPatientId">
-                        <option value="0">Selecciona un paciente</option>
+                    <select class="form-select" value="@NewPatientId" @onchange="CambiarPacienteSeleccionado">
+                        <option value="0">-- Selecciona un paciente --</option>
                         @foreach (var patient in Patients.OrderBy(p => p.Nombre).ThenBy(p => p.Apellido))
                         {
                             <option value="@patient.PacienteId">@patient.Nombre @patient.Apellido</option>
@@ -106,6 +107,13 @@
                     <div class="appointment-form-grid">
                         <label>Nombre *<input class="form-control" @bind="NewPatientName" /></label>
                         <label>Apellido *<input class="form-control" @bind="NewPatientSurname" /></label>
+                        <label>Género
+                            <select class="form-select" @bind="NewPatientSexo">
+                                <option value="">Sin especificar</option>
+                                <option value="Femenino">Femenino</option>
+                                <option value="Masculino">Masculino</option>
+                            </select>
+                        </label>
                         <label>Cédula (opcional)<input class="form-control" @bind="NewPatientCedula" /></label>
                         <label>Teléfono (opcional)<input class="form-control" @bind="NewPatientPhone" /></label>
                         <label>Correo electrónico (opcional)<input class="form-control" @bind="NewPatientEmail" /></label>
@@ -347,6 +355,8 @@
     private string NewObservations = "";
     private string NewPatientName = "";
     private string NewPatientSurname = "";
+    private string NewPatientSexo = "";
+    private void CambiarPacienteSeleccionado(ChangeEventArgs args) => NewPatientId = int.TryParse(args.Value?.ToString(), out var pacienteId) ? pacienteId : 0;
     private string NewPatientCedula = "";
     private string NewPatientPhone = "";
     private string NewPatientEmail = "";
@@ -579,6 +589,7 @@
                 FechaRegistro = DateTime.Now,
                 Nombre = NewPatientName.Trim(),
                 Apellido = NewPatientSurname.Trim(),
+                Sexo = Limpiar(NewPatientSexo),
                 Cedula = cedula,
                 Telefono = telefono,
                 Email = email,
@@ -626,6 +637,7 @@
             ShowPatientForm = false;
             SuccessMessage = "Paciente registrado y seleccionado. Ya puedes agendar la cita.";
             NewPatientName = NewPatientSurname = NewPatientCedula = NewPatientPhone = NewPatientEmail = "";
+            NewPatientSexo = "";
             NewPatientNumeroPoliza = "";
             NewPatientSeguroId = 0;
             NewPatientTieneSeguro = false;

@@ -11,14 +11,10 @@
         <NotAuthorized Context="guestNav">
             <nav class="nav-menu public-nav-menu">
                 <NavLink href="/" Match="NavLinkMatch.All" class="nav-item"><i class="fa-solid fa-house"></i><span>Inicio</span></NavLink>
-                <NavLink href="/noticias" class="nav-item"><i class="fa-regular fa-newspaper"></i><span>Noticias</span></NavLink>
                 <NavLink href="/agendar-cita" class="nav-item"><i class="fa-regular fa-calendar-plus"></i><span>Agendar cita</span></NavLink>
             </nav>
         </NotAuthorized>
         <Authorized Context="signedInNav">
-            <nav class="nav-menu public-nav-menu">
-                <NavLink href="/noticias" class="nav-item"><i class="fa-regular fa-newspaper"></i><span>Noticias</span></NavLink>
-            </nav>
         </Authorized>
     </AuthorizeView>
 
@@ -27,6 +23,7 @@
     <AuthorizeView Roles="Doctora,Secretaria" Context="staffSession">
         <nav class="nav-menu">
             <NavLink href="/" Match="NavLinkMatch.All" class="nav-item"><i class="fa-solid fa-chart-pie"></i><span>Resumen</span></NavLink>
+            <NavLink href="/agenda" class="nav-item"><i class="fa-solid fa-calendar-days"></i><span>Agenda</span></NavLink>
             <NavLink href="/citas" class="nav-item"><i class="fa-regular fa-calendar-check"></i><span>Citas</span></NavLink>
             <NavLink href="/pacientes" class="nav-item"><i class="fa-solid fa-user-group"></i><span>Pacientes</span></NavLink>
             <NavLink href="/pagos" class="nav-item"><i class="fa-regular fa-credit-card"></i><span>Pagos</span></NavLink>
@@ -53,6 +50,10 @@
             <NavLink href="/mi-portal" class="nav-item"><i class="fa-solid fa-user"></i><span>Mi perfil, citas y recetas</span></NavLink>
         </nav>
     </AuthorizeView>
+
+    <nav class="nav-menu public-nav-menu">
+        <NavLink href="/noticias" class="nav-item"><i class="fa-regular fa-newspaper"></i><span>Noticias</span></NavLink>
+    </nav>
 
     <div class="sidebar-bottom">
         <div class="mode-row">

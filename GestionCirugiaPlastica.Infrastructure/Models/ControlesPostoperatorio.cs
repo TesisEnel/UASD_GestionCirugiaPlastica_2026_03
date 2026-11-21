@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GestionCirugiaPlastica.Infrastructure.Models;
 
+[Table("ControlesPostoperatorios")]
 [Index("CirugiaId", "Fecha", Name = "IX_Controles_Cirugia_Fecha")]
 public partial class ControlesPostoperatorio
 {

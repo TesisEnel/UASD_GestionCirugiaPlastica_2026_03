@@ -275,6 +275,15 @@
                         </div>
 
                         <div class="pac-field">
+                            <label for="pac-sexo">Género</label>
+                            <InputSelect id="pac-sexo" @bind-Value="_form.Sexo">
+                                <option value="">Sin especificar</option>
+                                <option value="Femenino">Femenino</option>
+                                <option value="Masculino">Masculino</option>
+                            </InputSelect>
+                        </div>
+
+                        <div class="pac-field">
                             <label for="pac-cedula">Cédula</label>
                             <InputText id="pac-cedula" @bind-Value="_form.Cedula" placeholder="000-0000000-0" />
                             <ValidationMessage For="() => _form.Cedula" />
@@ -1084,6 +1093,8 @@
         public string? Cedula { get; set; }
 
         public DateOnly? FechaNacimiento { get; set; }
+
+        public string? Sexo { get; set; }
 
         public bool TieneSeguro { get; set; }
 

@@ -99,27 +99,24 @@
     height: 185px;
     margin: 25px auto;
     border-radius: 50%;
-    background: conic-gradient( #F8DCE3 0deg 105deg, #FFFFFF 105deg 245deg, #D8A7B5 245deg 310deg, rgba(255,255,255,0.3) 310deg 360deg );
+    background: transparent;
     position: relative;
 }
 
     .revenue-chart::before {
-        content: "";
-        position: absolute;
-        width: 135px;
-        height: 135px;
-        border-radius: 50%;
-        background: #A87984;
+        content: none;
     }
 
 .revenue-chart-center {
-    position: relative;
+    position: absolute;
+    inset: 0;
     z-index: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 7px;
     text-align: center;
+    pointer-events: none;
 }
 
     .revenue-chart-center span {
@@ -184,10 +181,14 @@
     background: #D8A7B5;
 }
 
+.expense-dot { background: #F8DCE3; }
+
+.revenue-chart canvas { width: 185px !important; height: 185px !important; }
+
 /* INDICADORES KPI */
 .overview-kpi-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 15px;
 }
 
@@ -226,6 +227,8 @@
     background: #F0EAF5;
     color: #9274A3;
 }
+
+.revenue-kpi-icon { background: #FCEBF0; color: #9E6E79; }
 
 .kpi-card h2 {
     margin: 13px 0 8px;
@@ -469,6 +472,9 @@
             height: 120px;
         }
 }
+
+.overview-error { padding: 12px 16px; border-radius: 10px; background: #fff0f0; color: #8e2932; }
+.overview-loading { margin: 0; color: #786d70; }
 
 /* Espacio para las gráficas de Chart.js */
 .chart-placeholder {
