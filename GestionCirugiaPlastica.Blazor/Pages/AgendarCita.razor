@@ -32,7 +32,7 @@
                         <label>Motivo de la cita<InputSelect @bind-Value="_request.TipoCita"><option value="">Selecciona una opción</option><option>Consulta</option><option>Evaluación</option><option>Seguimiento</option><option>Postoperatorio</option></InputSelect></label>
                         <label class="patient-booking-full">Información adicional<textarea @bind="_request.Observaciones" rows="3" maxlength="1000"></textarea></label>
                     </div>
-                    <button class="med-primary mt-3" type="submit" disabled="@_saving">@(_saving ? "Enviando..." : "Solicitar cita")</button>
+                    <button class="btn rounded-pill px-4 fw-semibold mt-3" style="background-color:#9c4d63;color:#ffffff;border:1px solid #9c4d63;font-weight:600;" type="submit" disabled="@_saving">@(_saving ? "Enviando..." : "Solicitar cita")</button>
                 </EditForm>
                 @if (_bookingError is not null) { <p class="alert alert-danger mt-3" role="alert">@_bookingError</p> }
                 @if (_bookingResult is not null)
@@ -51,7 +51,7 @@
                         <label>Cédula<InputText @bind-Value="_cancellation.Cedula" /></label>
                         <label>Teléfono<InputText @bind-Value="_cancellation.Telefono" /></label>
                     </div>
-                    <button class="med-secondary mt-3" type="submit" disabled="@_canceling">@(_canceling ? "Cancelando..." : "Cancelar cita")</button>
+                    <button class="btn btn-outline-danger rounded-pill px-4 fw-semibold mt-3" style="border:1px solid #b02a37;color:#b02a37;background-color:#ffffff;font-weight:600;" type="submit" disabled="@_canceling">@(_canceling ? "Cancelando..." : "Cancelar cita")</button>
                 </EditForm>
                 @if (_cancelMessage is not null) { <p class="alert @(_cancelSucceeded ? "alert-success" : "alert-warning") mt-3" role="status">@_cancelMessage</p> }
             </section>
