@@ -147,7 +147,8 @@ app.MapScalarApiReference(options =>
     options.WithOpenApiRoutePattern("/openapi/v1.json");
 });
 
-app.UseHttpsRedirection();
+if (!app.Environment.IsDevelopment())
+    app.UseHttpsRedirection();
 app.UseStaticFiles();
 
 // Activar CORS

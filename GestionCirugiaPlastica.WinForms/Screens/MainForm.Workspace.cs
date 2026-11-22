@@ -42,7 +42,7 @@ internal sealed partial class MainForm
             AddNav(menu, "Resumen"); AddNav(menu, "Agenda"); AddNav(menu, "Pacientes"); AddNav(menu, "Pagos");
             if (_api.IsDoctor) { AddNav(menu, "Cirugías"); AddNav(menu, "Recetas"); AddNav(menu, "Aseguradoras"); AddNav(menu, "Configuración"); }
         }
-        else if (_api.IsAssistant) { AddNav(menu, "Expedientes"); AddNav(menu, "Cirugías"); AddNav(menu, "Recetas"); }
+        else if (_api.IsAssistant) { AddNav(menu, "Resumen"); AddNav(menu, "Expedientes"); AddNav(menu, "Cirugías"); AddNav(menu, "Recetas"); }
         else if (_api.IsPatient) { AddNav(menu, "Inicio"); AddNav(menu, "Mi perfil, citas y recetas"); }
         if (_api.IsDoctor) AddNav(menu, "Notificaciones");
         AddNav(menu, "Noticias");
@@ -54,14 +54,14 @@ internal sealed partial class MainForm
         logout.FlatAppearance.BorderSize = 0; logout.FlatAppearance.MouseOverBackColor = Color.FromArgb(248, 233, 237); logout.TextAlign = ContentAlignment.MiddleLeft;
         logout.Click += (_, _) => { _api.Logout(); ShowLogin(); };
         footer.Controls.Add(logout); _sidebar.Controls.Add(footer);
-        var firstSection = _api.IsDoctor || _api.IsSecretary ? "Resumen" : _api.IsAssistant ? "Expedientes" : "Inicio";
+        var firstSection = _api.IsDoctor || _api.IsSecretary || _api.IsAssistant ? "Resumen" : "Inicio";
         await ShowSection(firstSection);
     }
 
     private void AddNav(FlowLayoutPanel menu, string name)
     {
         var icon = name switch { "Inicio" or "Resumen" => "◈", "Pacientes" => "♙", "Citas" or "Agenda" => "▦", "Cirugías" => "✚", "Expediente" or "Expedientes" => "▤", "Pagos" => "$", "Mi portal" or "Mi perfil, citas y recetas" => "○", "Recetas" => "Rx", "Aseguradoras" => "♡", "Configuración" => "⚙", "Notificaciones" => "♧", "Noticias" => "N", _ => "•" };
-        var selectedStart = _api.IsDoctor || _api.IsSecretary ? "Resumen" : _api.IsAssistant ? "Expedientes" : "Inicio";
+        var selectedStart = _api.IsDoctor || _api.IsSecretary || _api.IsAssistant ? "Resumen" : "Inicio";
         var initialSelection = name == selectedStart;
         var button = Button($"{icon}   {name}", initialSelection ? Color.FromArgb(248, 233, 237) : Color.White, initialSelection ? Mauve : Color.FromArgb(111, 105, 107)); button.TextAlign = ContentAlignment.MiddleLeft; button.Width = 207; button.Height = 44;
         if (initialSelection) button.Font = new Font("Segoe UI", 10, FontStyle.Bold);
