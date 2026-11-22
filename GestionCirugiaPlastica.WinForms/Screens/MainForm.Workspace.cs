@@ -7,6 +7,11 @@ internal sealed partial class MainForm
 {
     private async Task BuildWorkspace()
     {
+        if (_loginResizeHandler is not null)
+        {
+            _root.Resize -= _loginResizeHandler;
+            _loginResizeHandler = null;
+        }
         _root.Controls.Clear();
         _sidebar.Controls.Clear(); _content.Controls.Clear(); _pageContent.Controls.Clear(); _rightPanel.Controls.Clear();
         _sidebar.Paint += (_, e) => { using var pen = new Pen(Color.FromArgb(240, 236, 238)); e.Graphics.DrawLine(pen, _sidebar.Width - 1, 0, _sidebar.Width - 1, _sidebar.Height); };

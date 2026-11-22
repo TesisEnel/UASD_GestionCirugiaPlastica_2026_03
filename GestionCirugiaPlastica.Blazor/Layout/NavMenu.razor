@@ -20,27 +20,31 @@
 
     <div class="menu-label">MENÚ PRINCIPAL</div>
 
-    <AuthorizeView Roles="Doctora,Secretaria" Context="staffSession">
+    <AuthorizeView Roles="Doctora,Secretaria,AsistenteClinico" Context="clinicSession">
         <nav class="nav-menu">
-            <NavLink href="/" Match="NavLinkMatch.All" class="nav-item"><i class="fa-solid fa-chart-pie"></i><span>Resumen</span></NavLink>
-            <NavLink href="/agenda" class="nav-item"><i class="fa-solid fa-calendar-days"></i><span>Agenda</span></NavLink>
-            <NavLink href="/citas" class="nav-item"><i class="fa-regular fa-calendar-check"></i><span>Citas</span></NavLink>
-            <NavLink href="/pacientes" class="nav-item"><i class="fa-solid fa-user-group"></i><span>Pacientes</span></NavLink>
-            <NavLink href="/pagos" class="nav-item"><i class="fa-regular fa-credit-card"></i><span>Pagos</span></NavLink>
-            <AuthorizeView Roles="Doctora" Context="doctorSession">
+            <AuthorizeView Roles="Doctora,Secretaria" Context="staffTopSession">
+                <NavLink href="/" Match="NavLinkMatch.All" class="nav-item"><i class="fa-solid fa-chart-pie"></i><span>Resumen</span></NavLink>
+                <NavLink href="/agenda" class="nav-item"><i class="fa-solid fa-calendar-days"></i><span>Agenda</span></NavLink>
+                <NavLink href="/citas" class="nav-item"><i class="fa-regular fa-calendar-check"></i><span>Citas</span></NavLink>
+            </AuthorizeView>
+            <AuthorizeView Roles="AsistenteClinico" Context="assistantExpSession">
+                <NavLink href="/expedientes" class="nav-item"><i class="fa-solid fa-file-medical"></i><span>Expedientes</span></NavLink>
+            </AuthorizeView>
+            <AuthorizeView Roles="Doctora,AsistenteClinico" Context="consultasSession">
+                <NavLink href="/consultas" class="nav-item"><i class="fa-solid fa-stethoscope"></i><span>Consultas</span></NavLink>
+            </AuthorizeView>
+            <AuthorizeView Roles="Doctora,Secretaria" Context="staffMidSession">
+                <NavLink href="/pacientes" class="nav-item"><i class="fa-solid fa-user-group"></i><span>Pacientes</span></NavLink>
+                <NavLink href="/pagos" class="nav-item"><i class="fa-regular fa-credit-card"></i><span>Pagos</span></NavLink>
+            </AuthorizeView>
+            <AuthorizeView Roles="Doctora,AsistenteClinico" Context="clinicalBottomSession">
                 <NavLink href="/cirugias" class="nav-item"><i class="fa-solid fa-user-doctor"></i><span>Cirugías</span></NavLink>
                 <NavLink href="/recetas" class="nav-item"><i class="fa-solid fa-prescription-bottle-medical"></i><span>Recetas</span></NavLink>
+            </AuthorizeView>
+            <AuthorizeView Roles="Doctora" Context="doctorSession">
                 <NavLink href="/aseguradoras" class="nav-item"><i class="fa-solid fa-shield-heart"></i><span>Aseguradoras</span></NavLink>
                 <NavLink href="/configuracion" class="nav-item"><i class="fa-solid fa-gear"></i><span>Configuración</span></NavLink>
             </AuthorizeView>
-        </nav>
-    </AuthorizeView>
-
-    <AuthorizeView Roles="AsistenteClinico">
-        <nav class="nav-menu">
-            <NavLink href="/expedientes" class="nav-item"><i class="fa-solid fa-file-medical"></i><span>Expedientes</span></NavLink>
-            <NavLink href="/cirugias" class="nav-item"><i class="fa-solid fa-user-doctor"></i><span>Cirugías</span></NavLink>
-            <NavLink href="/recetas" class="nav-item"><i class="fa-solid fa-prescription-bottle-medical"></i><span>Recetas</span></NavLink>
         </nav>
     </AuthorizeView>
 

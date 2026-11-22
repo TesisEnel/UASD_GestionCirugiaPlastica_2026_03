@@ -748,7 +748,7 @@
         {
             var expediente = await Http.GetFromJsonAsync<ExpedienteResumen>($"api/Pacientes/expediente/{paciente.PacienteId}");
             if (expediente is null) { MostrarMensaje("No se pudo cargar el expediente.", true); return; }
-            if (expediente.Citas.Count > 0 || expediente.Operaciones.Count > 0)
+            if (expediente.Citas.Count > 0 || expediente.Operaciones.Count > 0 || expediente.Consultas.Count > 0 || expediente.Recetas.Count > 0)
                 Navigation.NavigateTo($"/pacientes/expediente/{paciente.PacienteId}");
             else
                 _pacienteSinHistorial = paciente;
@@ -1164,6 +1164,8 @@
     {
         public List<object> Citas { get; set; } = new();
         public List<object> Operaciones { get; set; } = new();
+        public List<object> Consultas { get; set; } = new();
+        public List<object> Recetas { get; set; } = new();
     }
 }
 

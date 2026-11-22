@@ -18,6 +18,13 @@
     {
         <section class="med-card">
             <h2>@(_form.RecetaId == 0 ? "Nueva receta" : "Editar receta")</h2>
+            @if (_form.ConsultaId is int consultaVinculadaId && consultaVinculadaId > 0)
+            {
+                <div class="payment-success" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px;">
+                    <span><i class="fa-solid fa-stethoscope"></i> Vinculada a la consulta #@consultaVinculadaId</span>
+                    <button type="button" class="med-secondary" @onclick="() => _form.ConsultaId = null">Desvincular</button>
+                </div>
+            }
             <EditForm Model="_form" OnValidSubmit="GuardarAsync">
                 <div class="med-grid">
                     <label>Paciente<select class="form-select" value="@_form.PacienteId" @onchange="CambiarPaciente"><option value="0">-- Selecciona un paciente --</option>@foreach (var p in _pacientes) { <option value="@p.PacienteId">@p.Nombre @p.Apellido</option> }</select></label>
@@ -97,6 +104,9 @@
 }
 
 @code {
+    [SupplyParameterFromQuery(Name = "pacienteId")] public int? PacienteIdQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "consultaId")] public int? ConsultaIdQuery { get; set; }
+
     private List<RecetaDto> _recetas = new();
     private List<PacienteDto> _pacientes = new();
     private RecetaForm? _form;
@@ -119,6 +129,17 @@
             await Task.WhenAll(pTask, rTask);
             _pacientes = (await pTask)?.Value ?? new();
             _recetas = (await rTask)?.Value ?? new();
+            if (PacienteIdQuery is int pid && pid > 0 && _pacientes.Any(p => p.PacienteId == pid))
+            {
+                _formError = null;
+                _form = new RecetaForm
+                {
+                    PacienteId = pid,
+                    ConsultaId = ConsultaIdQuery is > 0 ? ConsultaIdQuery : null,
+                    Fecha = DateTime.Today,
+                    DetallesReceta = [new()]
+                };
+            }
         }
         catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException) { _error = "No se pudieron cargar pacientes y recetas."; }
     }

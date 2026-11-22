@@ -99,5 +99,11 @@
 .theme-dark .login-card h1,.theme-dark .login-card label,.theme-dark .profile-photo-card h2 { color:#F4EDF0!important; }
 .theme-dark .login-card p,.theme-dark .login-register-link,.theme-dark .account-help { color:#C7B9BF!important; }
 .theme-dark .login-card input,.theme-dark .account-form-grid input { background:#1D1A1D!important; border-color:#574850!important; color:#F4EDF0!important; }
+.theme-dark .med-grid input,.theme-dark .med-grid select,.theme-dark .med-grid textarea,.theme-dark .med-search,.theme-dark .med-filters select { background:#1D1A1D; border-color:#574850; color:#F4EDF0; }
+.theme-dark .consulta-field-block,.theme-dark .consulta-detail-text,.theme-dark .consulta-detail-cita,.theme-dark .consulta-today-strip,.theme-dark .receta-patient-details div { background:#1F1B1F; border-color:#4D4046; color:#F4EDF0; }
+.theme-dark .consulta-field-block p,.theme-dark .receta-patient-details dd { color:#F4EDF0; }
+.theme-dark .consulta-motivo,.theme-dark .consulta-today-label,.theme-dark .consulta-detail-cita strong { color:#F1C7D2!important; }
+.theme-dark .consulta-today-chip,.theme-dark .consulta-action-pill { background:#2E262B; border-color:#574850; color:#F1C7D2; }
+.theme-dark .consulta-today-chip.selected,.theme-dark .consulta-action-pill:hover { background:#9E6E79; border-color:#9E6E79; color:#FFFFFF; }
 @media(max-width:760px) { .clinic-home-hero { min-height:0; } .clinic-home-emblem { display:none; } .clinic-home-services,.clinic-news-grid { grid-template-columns:1fr; } .public-booking-grid { grid-template-columns:1fr; } }
 @media(max-width:520px) { .clinic-news-form-grid { grid-template-columns:1fr; } .news-form-full { grid-column:auto; } .clinic-home-news > header,.notification-body header { align-items:flex-start; flex-direction:column; } .notification-card { flex-wrap:wrap; } .notification-read-button { margin-left:50px; } .clinic-home-footer a { margin-left:0; } }

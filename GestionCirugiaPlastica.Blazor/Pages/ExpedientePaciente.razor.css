@@ -28,6 +28,17 @@
 .record-card { margin:12px 0; padding:15px; border:1px solid var(--border); border-left:4px solid #C67C8E; border-radius:10px; background:#fff; }
 .record-card time,.record-card span { display:block; color:#777273; font-size:12px; margin-bottom:6px; }
 .record-card h3 { margin:4px 0; color:#68414A; }
+.expediente-section-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+.expediente-section-head h2 { margin:0; }
+.expediente-link-btn { display:inline-block; text-decoration:none; }
+.expediente-link-btn:hover { background:#4F2934; color:#fff; }
+.expediente-prewrap { white-space:pre-wrap; }
+.record-card-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+.expediente-mini-link { display:inline-block; padding:6px 11px; border:1px solid #C8AEB5; border-radius:8px; background:#FCF8F9; color:#68414A; font-size:12px; font-weight:600; text-decoration:none; }
+.expediente-mini-link:hover { background:#68414A; border-color:#68414A; color:#fff; }
+.expediente-picker h2 { margin:0 0 6px; font-size:18px; color:var(--wine); }
+.expediente-picker-row { display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
+.expediente-select { min-width:280px; max-width:460px; width:100%; padding:9px 12px; border:1px solid var(--border); border-radius:8px; background:#fff; color:#36383A; }
 .audit-row { padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; }
 .clinical-timeline { border-left:2px solid #C67C8E; margin:15px 0 8px 8px; padding-left:20px; }
 .print-only { display:none; }

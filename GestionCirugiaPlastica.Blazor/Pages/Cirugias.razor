@@ -148,6 +148,9 @@
 }
 
 @code {
+    [SupplyParameterFromQuery(Name = "pacienteId")] public int? PacienteIdQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "consultaId")] public int? ConsultaIdQuery { get; set; }
+
     private static readonly string[] Estados = ["Estudios preoperatorios", "Programada", "En proceso", "Postoperatorio / Recuperación", "Completada"];
     private List<CirugiaDto> _cirugias = new();
     private List<PersonaDto> _pacientes = new();
@@ -195,6 +198,27 @@
             _cirugias = (await cirugiasTask)?.Value ?? new();
             _pacientes = (await pacientesTask)?.Value ?? new();
             _procedimientos = (await procedimientosTask)?.Value ?? new();
+            if (PacienteIdQuery is int pid && pid > 0 && _pacientes.Any(p => p.PacienteId == pid))
+            {
+                string? diagnosticoInicial = null;
+                if (ConsultaIdQuery is int cid && cid > 0)
+                {
+                    try
+                    {
+                        var consulta = await Http.GetFromJsonAsync<Envelope<ConsultaOrigenDto>>($"api/Consultas/{cid}");
+                        diagnosticoInicial = consulta?.Value?.Diagnostico;
+                    }
+                    catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException) { }
+                }
+                _formError = null;
+                _form = new CirugiaForm
+                {
+                    PacienteId = pid,
+                    FechaCirugia = DateTime.Today,
+                    Estado = Estados[0],
+                    DiagnosticoPreoperatorio = diagnosticoInicial
+                };
+            }
             await CargarFotosAsync(_cirugias);
         }
         catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException) { _error = "No se pudo cargar la información clínica."; }
@@ -312,6 +336,7 @@
     }
 
     private sealed class Envelope<T> { public T? Value { get; set; } }
+    private sealed class ConsultaOrigenDto { public string? Diagnostico { get; set; } }
     private sealed class PersonaDto { public int PacienteId { get; set; } public string Nombre { get; set; } = ""; public string Apellido { get; set; } = ""; }
     private sealed class ProcedimientoDto { public int ProcedimientoId { get; set; } public string Nombre { get; set; } = ""; public string? Descripcion { get; set; } public decimal PrecioBase { get; set; } }
     private sealed class ProcedimientoForm { public string Nombre { get; set; } = ""; public string? Descripcion { get; set; } public decimal PrecioBase { get; set; } }

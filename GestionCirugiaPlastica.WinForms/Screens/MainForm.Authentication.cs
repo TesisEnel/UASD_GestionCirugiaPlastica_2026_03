@@ -5,12 +5,27 @@ namespace GestionCirugiaPlastica.WinForms;
 
 internal sealed partial class MainForm
 {
+    private EventHandler? _loginResizeHandler;
+
     private void ShowLogin()
     {
+        if (_loginResizeHandler is not null)
+        {
+            _root.Resize -= _loginResizeHandler;
+            _loginResizeHandler = null;
+        }
+
         _root.Controls.Clear();
         var card = new Panel { Size = new Size(460, 590), BackColor = Color.White, Padding = new Padding(40) };
-        card.Left = (ClientSize.Width - card.Width) / 2; card.Top = (ClientSize.Height - card.Height) / 2;
-        _root.Resize += (_, _) => { card.Left = (_root.ClientSize.Width - card.Width) / 2; card.Top = (_root.ClientSize.Height - card.Height) / 2; };
+        void CenterCard()
+        {
+            card.Left = Math.Max(0, (_root.ClientSize.Width - card.Width) / 2);
+            card.Top = Math.Max(0, (_root.ClientSize.Height - card.Height) / 2);
+        }
+        CenterCard();
+        _loginResizeHandler = (_, _) => CenterCard();
+        _root.Resize += _loginResizeHandler;
+
         var brand = new Label { Text = "TANGER CLINIC", Font = new Font("Segoe UI", 13, FontStyle.Bold), ForeColor = Mauve, AutoSize = true, Top = 38 };
         var title = new Label { Text = "Bienvenido", Font = new Font("Segoe UI", 26, FontStyle.Bold), ForeColor = Charcoal, AutoSize = true, Top = 82 };
         var subtitle = new Label { Text = "Accede al sistema de gestión clínica", ForeColor = Taupe, AutoSize = true, Top = 128 };
@@ -20,8 +35,20 @@ internal sealed partial class MainForm
         var login = Button("Iniciar sesión", Mauve, Color.White); login.Left = 0; login.Top = 350; login.Width = 375; login.Height = 48;
         login.Click += async (_, _) =>
         {
+            var identifier = user.Text.Trim();
+            if (string.IsNullOrWhiteSpace(identifier) || string.IsNullOrWhiteSpace(password.Text))
+            {
+                message.ForeColor = Color.Firebrick;
+                message.Text = "Ingresa tu usuario (o correo) y contraseña.";
+                return;
+            }
+
             login.Enabled = false; message.Text = "Conectando con la API…"; message.ForeColor = Taupe;
-            try { await _api.LoginAsync(user.Text.Trim(), password.Text); await BuildWorkspace(); }
+            try
+            {
+                await _api.LoginAsync(identifier, password.Text);
+                await BuildWorkspace();
+            }
             catch (Exception ex) { message.ForeColor = Color.Firebrick; message.Text = UserMessage(ex); }
             finally { login.Enabled = true; }
         };
@@ -31,7 +58,8 @@ internal sealed partial class MainForm
         booking.Click += (_, _) => { using var form = new PublicAppointmentForm(_api); form.ShowDialog(this); };
         var news = Button("Noticias", Color.White, Mauve); news.Left = 195; news.Top = 460; news.Width = 180; news.Height = 38; news.FlatAppearance.BorderColor = Color.FromArgb(231, 221, 224);
         news.Click += async (_, _) => await ShowPublicNews();
-        password.KeyDown += (_, e) => { if (e.KeyCode == Keys.Enter) login.PerformClick(); };
+        user.KeyDown += (_, e) => { if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; password.Focus(); } };
+        password.KeyDown += (_, e) => { if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; login.PerformClick(); } };
         card.Controls.AddRange([brand, title, subtitle, user, password, message, login, register, booking, news]);
         _root.Controls.Add(card);
     }

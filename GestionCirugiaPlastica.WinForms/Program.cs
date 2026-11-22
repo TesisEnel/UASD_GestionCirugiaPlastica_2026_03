@@ -9,13 +9,24 @@ internal static class Program
     {
         ApplicationConfiguration.Initialize();
         var settingsPath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
-        var baseUrl = "http://localhost:5258/";
+        var baseUrl = "https://localhost:7214/";
+        var fallbackBaseUrl = "http://localhost:5258/";
         if (File.Exists(settingsPath))
         {
             using var config = JsonDocument.Parse(File.ReadAllText(settingsPath));
-            if (config.RootElement.TryGetProperty("Api", out var api) && api.TryGetProperty("BaseUrl", out var url))
-                baseUrl = url.GetString() ?? baseUrl;
+            if (config.RootElement.TryGetProperty("Api", out var api))
+            {
+                if (api.TryGetProperty("BaseUrl", out var url) && !string.IsNullOrWhiteSpace(url.GetString()))
+                    baseUrl = url.GetString()!;
+                if (api.TryGetProperty("FallbackBaseUrl", out var fallback) && !string.IsNullOrWhiteSpace(fallback.GetString()))
+                    fallbackBaseUrl = fallback.GetString()!;
+            }
         }
-        Application.Run(new MainForm(new ClinicApiClient(new Uri(baseUrl))));
+        static Uri EnsureTrailingSlash(string raw) =>
+            new(raw.EndsWith('/') ? raw : raw + "/");
+
+        Application.Run(new MainForm(new ClinicApiClient(
+            EnsureTrailingSlash(baseUrl),
+            EnsureTrailingSlash(fallbackBaseUrl))));
     }
 }

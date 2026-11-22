@@ -62,25 +62,6 @@ public sealed class ExpedienteController(IDbContextFactory<GestionCirugiaPlastic
             .Select(f => new { f.FotografiaId, f.CirugiaId, f.Fecha, f.Tipo, f.Descripcion })
             .ToListAsync();
 
-        if (User.IsInRole("AsistenteClinico"))
-        {
-            var pacienteClinico = new { paciente.PacienteId, paciente.Nombre, paciente.Apellido, paciente.Cedula };
-            return Ok(new
-            {
-                paciente = pacienteClinico,
-                seguro = new { tieneSeguro = false, polizas = Array.Empty<object>() },
-                citas = Array.Empty<object>(), operaciones, fotografias,
-                historial = (object?)null,
-                consultas = Array.Empty<object>(), preoperatorios = Array.Empty<object>(),
-                controles = Array.Empty<object>(), recetas = Array.Empty<object>(),
-                pagos = Array.Empty<object>(), documentos = Array.Empty<object>(), auditoria = Array.Empty<object>()
-            });
-        }
-
-        var historial = await db.HistorialClinicos.AsNoTracking()
-            .Where(h => h.PacienteId == pacienteId)
-            .Select(h => new { h.HistoriaId, h.FechaActualizacion, h.Antecedentes, h.AntecedentesPersonales, h.AntecedentesFamiliares, h.Alergias, h.Medicamentos, h.NotasMedicas })
-            .SingleOrDefaultAsync();
         var consultas = await db.Consultas.AsNoTracking().Where(c => c.PacienteId == pacienteId)
             .OrderByDescending(c => c.Fecha)
             .Select(c => new { c.ConsultaId, c.Fecha, c.CitaId, c.Motivo, c.Diagnostico, c.Observaciones })
@@ -97,6 +78,27 @@ public sealed class ExpedienteController(IDbContextFactory<GestionCirugiaPlastic
             .OrderByDescending(r => r.Fecha)
             .Select(r => new { r.RecetaId, r.Fecha, r.ConsultaId, r.CirugiaId, r.Indicaciones, Detalles = r.DetallesReceta.Select(d => new { d.Medicamento, d.Dosis, d.Frecuencia, d.Duracion, d.Instrucciones }).ToList() })
             .ToListAsync();
+
+        if (User.IsInRole("AsistenteClinico"))
+        {
+            var pacienteClinico = new { paciente.PacienteId, paciente.Nombre, paciente.Apellido, paciente.Cedula };
+            var citasClinicas = citas.Select(c => new { c.CitaId, c.Fecha, c.TipoCita, c.Estado, EstadoPago = "", c.Observaciones }).ToList();
+            return Ok(new
+            {
+                paciente = pacienteClinico,
+                seguro = new { tieneSeguro = false, polizas = Array.Empty<object>() },
+                citas = citasClinicas, operaciones, fotografias,
+                historial = (object?)null,
+                consultas, preoperatorios,
+                controles, recetas,
+                pagos = Array.Empty<object>(), documentos = Array.Empty<object>(), auditoria = Array.Empty<object>()
+            });
+        }
+
+        var historial = await db.HistorialClinicos.AsNoTracking()
+            .Where(h => h.PacienteId == pacienteId)
+            .Select(h => new { h.HistoriaId, h.FechaActualizacion, h.Antecedentes, h.AntecedentesPersonales, h.AntecedentesFamiliares, h.Alergias, h.Medicamentos, h.NotasMedicas })
+            .SingleOrDefaultAsync();
         var pagos = await db.Pagos.AsNoTracking().Where(p => (p.Cita != null && p.Cita.PacienteId == pacienteId) || (p.Cirugia != null && p.Cirugia.PacienteId == pacienteId))
             .OrderByDescending(p => p.Fecha)
             .Select(p => new { p.PagoId, p.Fecha, p.Monto, p.MetodoPago, p.CitaId, p.CirugiaId, p.Concepto })

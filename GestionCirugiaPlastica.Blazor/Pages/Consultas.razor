@@ -1,0 +1,982 @@
+@page "/consultas"
+@attribute [Authorize(Roles = "Doctora,AsistenteClinico")]
+@using System.Globalization
+@using System.Text.Json
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<PageTitle>Consultas | Tanger Clinic</PageTitle>
+
+<div class="med-page consultas-page">
+    <header class="med-page-header">
+        <div>
+            <h1>Consultas médicas</h1>
+            <p>Evaluaciones clínicas, diagnósticos y seguimiento de pacientes</p>
+        </div>
+        <button type="button" class="med-primary" @onclick="AlternarFormulario">
+            @(_form is null ? "+ Nueva consulta" : "Cerrar formulario")
+        </button>
+    </header>
+
+    @if (_error is not null)
+    {
+        <div class="med-error" role="alert">@_error</div>
+    }
+
+    @if (_success is not null)
+    {
+        <div class="payment-success consultas-success" role="status">
+            <span>@_success</span>
+            <button type="button" class="consultas-dismiss" aria-label="Cerrar aviso" @onclick="() => _success = null">×</button>
+        </div>
+    }
+
+    <!-- RESUMEN RÁPIDO -->
+    <section class="consultas-stats" aria-label="Resumen de consultas">
+        <article class="consulta-stat-card">
+            <div class="consulta-stat-icon"><i class="fa-solid fa-stethoscope"></i></div>
+            <div>
+                <span>Total consultas</span>
+                <strong>@_consultas.Count</strong>
+            </div>
+        </article>
+        <article class="consulta-stat-card">
+            <div class="consulta-stat-icon"><i class="fa-regular fa-calendar-check"></i></div>
+            <div>
+                <span>Consultas hoy</span>
+                <strong>@_consultas.Count(c => c.Fecha.Date == DateTime.Today)</strong>
+            </div>
+        </article>
+        <article class="consulta-stat-card">
+            <div class="consulta-stat-icon"><i class="fa-solid fa-user-check"></i></div>
+            <div>
+                <span>Pacientes evaluados</span>
+                <strong>@_consultas.Select(c => c.PacienteId).Distinct().Count()</strong>
+            </div>
+        </article>
+        <article class="consulta-stat-card">
+            <div class="consulta-stat-icon"><i class="fa-solid fa-link"></i></div>
+            <div>
+                <span>Con cita vinculada</span>
+                <strong>@_consultas.Count(c => c.CitaId.HasValue)</strong>
+            </div>
+        </article>
+    </section>
+
+    <!-- FORMULARIO: REGISTRAR / EDITAR CONSULTA -->
+    @if (_form is not null)
+    {
+        <section class="med-card consulta-form-card">
+            <header class="consulta-form-header">
+                <div>
+                    <h2>@(_form.ConsultaId == 0 ? "Registrar nueva consulta" : $"Editar consulta #{_form.ConsultaId}")</h2>
+                    <p>Completa la evaluación clínica y vincula opcionalmente una cita del día.</p>
+                </div>
+            </header>
+
+            @if (_form.ConsultaId == 0 && CitasDeHoyActivas.Count > 0)
+            {
+                <div class="consulta-today-strip">
+                    <span class="consulta-today-label"><i class="fa-regular fa-clock"></i> Citas de hoy (selección rápida):</span>
+                    <div class="consulta-today-chips">
+                        @foreach (var cita in CitasDeHoyActivas)
+                        {
+                            var activa = _form.CitaId == cita.CitaId;
+                            <button type="button"
+                                    class="consulta-today-chip @(activa ? "selected" : "")"
+                                    @onclick="() => SeleccionarCitaRapida(cita)">
+                                <strong>@NombrePacienteCita(cita)</strong>
+                                <span>@cita.Fecha.ToString("hh:mm tt", CultureInfo.GetCultureInfo("en-US")) · @(string.IsNullOrWhiteSpace(cita.TipoCita) ? "Cita" : cita.TipoCita)</span>
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
+
+            <EditForm Model="_form" OnValidSubmit="GuardarAsync">
+                <div class="med-grid">
+                    <label>
+                        Paciente *
+                        <select value="@_form.PacienteId" @onchange="CambiarPaciente">
+                            <option value="0">-- Selecciona un paciente --</option>
+                            @foreach (var p in _pacientes)
+                            {
+                                <option value="@p.PacienteId">@p.Nombre @p.Apellido@(string.IsNullOrWhiteSpace(p.Cedula) ? "" : $" · {p.Cedula}")</option>
+                            }
+                        </select>
+                    </label>
+
+                    <label>
+                        Cita del día / vinculada (opcional)
+                        <select value="@(_form.CitaId ?? 0)" @onchange="CambiarCita" disabled="@(_form.PacienteId <= 0)">
+                            <option value="0">@(_form.PacienteId <= 0 ? "-- Selecciona primero un paciente --" : "-- Sin cita vinculada --")</option>
+                            @if (_form.PacienteId > 0)
+                            {
+                                var citasHoy = CitasDeHoyPaciente(_form.PacienteId);
+                                var otrasCitas = OtrasCitasPaciente(_form.PacienteId);
+                                @if (citasHoy.Count > 0)
+                                {
+                                    <optgroup label="Citas de hoy">
+                                        @foreach (var cita in citasHoy)
+                                        {
+                                            <option value="@cita.CitaId">@EtiquetaCita(cita)</option>
+                                        }
+                                    </optgroup>
+                                }
+                                @if (otrasCitas.Count > 0)
+                                {
+                                    <optgroup label="Otras citas del paciente">
+                                        @foreach (var cita in otrasCitas)
+                                        {
+                                            <option value="@cita.CitaId">@EtiquetaCita(cita)</option>
+                                        }
+                                    </optgroup>
+                                }
+                            }
+                        </select>
+                    </label>
+
+                    <label>
+                        Fecha de consulta *
+                        <input type="date" value="@_fechaTexto" @onchange="CambiarFecha" />
+                    </label>
+
+                    <label>
+                        Hora *
+                        <input type="time" value="@_horaTexto" @onchange="CambiarHora" />
+                    </label>
+
+                    <label class="med-span">
+                        <span class="consulta-label-row">
+                            <span>Motivo de consulta *</span>
+                            <small class="consulta-char-count">@((_form.Motivo?.Length ?? 0))/250</small>
+                        </span>
+                        <input type="text"
+                               maxlength="250"
+                               placeholder="Ej. Evaluación inicial para rinoplastia, revisión postoperatoria..."
+                               @bind="_form.Motivo"
+                               @bind:event="oninput" />
+                    </label>
+
+                    <label class="med-span">
+                        Diagnóstico
+                        <textarea rows="3"
+                                  placeholder="Diagnóstico clínico o impresión diagnóstica..."
+                                  @bind="_form.Diagnostico"></textarea>
+                    </label>
+
+                    <label class="med-span">
+                        Observaciones / Evaluación clínica
+                        <textarea rows="4"
+                                  placeholder="Hallazgos de la evaluación física, antecedentes relevantes, plan terapéutico y recomendaciones..."
+                                  @bind="_form.Observaciones"></textarea>
+                    </label>
+                </div>
+
+                @if (_formError is not null)
+                {
+                    <p class="med-error" role="alert">@_formError</p>
+                }
+
+                <div class="med-form-actions">
+                    <button class="med-primary" type="submit" disabled="@_saving">
+                        @(_saving ? "Guardando…" : _form.ConsultaId == 0 ? "Guardar consulta" : "Guardar cambios")
+                    </button>
+                    <button class="med-secondary" type="button" @onclick="CancelarFormulario" disabled="@_saving">
+                        Cancelar
+                    </button>
+                </div>
+            </EditForm>
+        </section>
+    }
+
+    <!-- BUSCADOR Y FILTROS -->
+    <section class="med-card consultas-filters-card" aria-label="Filtros de consultas">
+        <div class="consultas-filters">
+            <div class="consulta-search-wrap">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input class="med-search"
+                       type="search"
+                       placeholder="Buscar por nombre o cédula del paciente, motivo o diagnóstico..."
+                       @bind="_buscar"
+                       @bind:event="oninput" />
+            </div>
+
+            <select aria-label="Filtrar por paciente" @bind="_pacienteFiltro">
+                <option value="0">Todos los pacientes</option>
+                @foreach (var p in _pacientes)
+                {
+                    <option value="@p.PacienteId">@p.Nombre @p.Apellido@(string.IsNullOrWhiteSpace(p.Cedula) ? "" : $" · {p.Cedula}")</option>
+                }
+            </select>
+
+            <select aria-label="Filtrar por período" @bind="_periodoFiltro">
+                <option value="todas">Todas las fechas</option>
+                <option value="hoy">Hoy</option>
+                <option value="semana">Últimos 7 días</option>
+                <option value="mes">Este mes</option>
+            </select>
+
+            @if (HayFiltrosActivos)
+            {
+                <button type="button" class="med-secondary consultas-clear-btn" @onclick="LimpiarFiltros">Limpiar</button>
+            }
+        </div>
+        <div class="consultas-results-meta">
+            <span>Mostrando <strong>@ConsultasVisibles.Count</strong> de @_consultas.Count @(_consultas.Count == 1 ? "consulta" : "consultas")</span>
+        </div>
+    </section>
+
+    <!-- LISTADO E HISTORIAL DE CONSULTAS -->
+    @if (_loading)
+    {
+        <section class="med-card consultas-empty">
+            <p>Cargando historial de consultas...</p>
+        </section>
+    }
+    else if (_consultas.Count == 0)
+    {
+        <section class="med-card consultas-empty">
+            <i class="fa-solid fa-stethoscope"></i>
+            <p>Todavía no hay consultas registradas.</p>
+            <button type="button" class="med-primary" @onclick="NuevaConsulta">Registrar la primera consulta</button>
+        </section>
+    }
+    else if (ConsultasVisibles.Count == 0)
+    {
+        <section class="med-card consultas-empty">
+            <i class="fa-solid fa-filter-circle-xmark"></i>
+            <p>No se encontraron consultas que coincidan con los filtros aplicados.</p>
+            <button type="button" class="med-secondary" @onclick="LimpiarFiltros">Mostrar todas</button>
+        </section>
+    }
+    else
+    {
+        <div class="consultas-list">
+            @foreach (var consulta in ConsultasVisibles)
+            {
+                <article class="med-card consulta-card"
+                         role="button"
+                         tabindex="0"
+                         @onclick="() => AbrirDetalleAsync(consulta)"
+                         @onkeydown="e => AbrirDetalleConTeclaAsync(consulta, e)">
+                    <header class="consulta-card-header">
+                        <div class="consulta-card-patient">
+                            <div class="consulta-avatar">@InicialesPaciente(consulta)</div>
+                            <div>
+                                <div class="consulta-meta-row">
+                                    <span class="consulta-date-badge">
+                                        <i class="fa-regular fa-calendar"></i>
+                                        @consulta.Fecha.ToString("dd/MM/yyyy · hh:mm tt", CultureInfo.GetCultureInfo("en-US"))
+                                    </span>
+                                    @if (consulta.CitaId is int citaId)
+                                    {
+                                        <span class="consulta-cita-badge">
+                                            <i class="fa-solid fa-link"></i>
+                                            Cita #@citaId@(string.IsNullOrWhiteSpace(consulta.Cita?.TipoCita) ? "" : $" · {consulta.Cita!.TipoCita}")
+                                        </span>
+                                    }
+                                </div>
+                                <h2>@NombrePaciente(consulta)</h2>
+                                @if (!string.IsNullOrWhiteSpace(CedulaPaciente(consulta)))
+                                {
+                                    <span class="consulta-cedula">Cédula: @CedulaPaciente(consulta)</span>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="consulta-quick-actions" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
+                            <button type="button" class="consulta-action-pill" title="Emitir receta para este paciente" @onclick="() => IrAReceta(consulta)">
+                                <i class="fa-solid fa-prescription-bottle-medical"></i> Emitir receta
+                            </button>
+                            <button type="button" class="consulta-action-pill" title="Programar cirugía para este paciente" @onclick="() => IrACirugia(consulta)">
+                                <i class="fa-solid fa-user-doctor"></i> Programar cirugía
+                            </button>
+                            <button type="button" class="consulta-action-pill consulta-action-subtle" title="Abrir expediente clínico" @onclick="() => IrAExpediente(consulta.PacienteId)">
+                                <i class="fa-solid fa-file-medical"></i> Expediente
+                            </button>
+                            <button type="button" class="consulta-action-pill consulta-action-subtle" title="Editar consulta" @onclick="() => EditarConsulta(consulta)">
+                                <i class="fa-regular fa-pen-to-square"></i> Editar
+                            </button>
+                        </div>
+                    </header>
+
+                    <div class="consulta-card-body">
+                        <div class="consulta-field-block">
+                            <span class="consulta-field-label">Motivo de consulta</span>
+                            <p class="consulta-motivo">@(string.IsNullOrWhiteSpace(consulta.Motivo) ? "Sin motivo especificado" : consulta.Motivo)</p>
+                        </div>
+
+                        <div class="consulta-summary-grid">
+                            <div class="consulta-field-block">
+                                <span class="consulta-field-label">Diagnóstico</span>
+                                <p>@(string.IsNullOrWhiteSpace(consulta.Diagnostico) ? "Sin diagnóstico registrado." : ResumirTexto(consulta.Diagnostico, 180))</p>
+                            </div>
+                            <div class="consulta-field-block">
+                                <span class="consulta-field-label">Observaciones / Evaluación clínica</span>
+                                <p>@(string.IsNullOrWhiteSpace(consulta.Observaciones) ? "Sin observaciones adicionales." : ResumirTexto(consulta.Observaciones, 180))</p>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+            }
+        </div>
+    }
+</div>
+
+<!-- MODAL: DETALLE COMPLETO DE CONSULTA -->
+@if (_detalle is not null)
+{
+    <div class="receta-detail-overlay" role="presentation" @onclick="CerrarDetalle">
+        <section class="med-card receta-detail-modal consulta-detail-modal"
+                 role="dialog"
+                 aria-modal="true"
+                 aria-labelledby="consulta-detail-title"
+                 @onclick:stopPropagation="true">
+            <header class="receta-detail-heading">
+                <div>
+                    <span>Consulta #@_detalle.ConsultaId · @_detalle.Fecha.ToString("dd/MM/yyyy hh:mm tt", CultureInfo.GetCultureInfo("en-US"))</span>
+                    <h2 id="consulta-detail-title">Detalle completo de la consulta</h2>
+                </div>
+                <button type="button" class="med-secondary" @onclick="CerrarDetalle">Cerrar</button>
+            </header>
+
+            @if (_cargandoDetalle)
+            {
+                <p class="consulta-muted">Cargando detalle actualizado…</p>
+            }
+            @if (_detalleError is not null)
+            {
+                <div class="med-error" role="alert">@_detalleError</div>
+            }
+
+            <h3>Datos del paciente</h3>
+            <dl class="receta-patient-details">
+                <div><dt>Nombre completo</dt><dd>@NombrePaciente(_detalle)</dd></div>
+                <div><dt>Cédula</dt><dd>@(CedulaPaciente(_detalle) ?? "—")</dd></div>
+                @if (!string.IsNullOrWhiteSpace(_detalle.Paciente?.Telefono))
+                {
+                    <div><dt>Teléfono</dt><dd>@_detalle.Paciente!.Telefono</dd></div>
+                }
+                @if (!string.IsNullOrWhiteSpace(_detalle.Paciente?.Email))
+                {
+                    <div><dt>Correo</dt><dd>@_detalle.Paciente!.Email</dd></div>
+                }
+            </dl>
+
+            @if (_detalle.CitaId is int citaIdDetalle)
+            {
+                <h3>Cita vinculada</h3>
+                <div class="consulta-detail-cita">
+                    <strong>Cita #@citaIdDetalle</strong>
+                    @if (_detalle.Cita is not null)
+                    {
+                        <span>@_detalle.Cita.Fecha.ToString("dd/MM/yyyy hh:mm tt", CultureInfo.GetCultureInfo("en-US")) · @(_detalle.Cita.TipoCita ?? "Cita") · Estado: @_detalle.Cita.Estado</span>
+                    }
+                    else if (_citas.FirstOrDefault(c => c.CitaId == citaIdDetalle) is { } citaLocal)
+                    {
+                        <span>@citaLocal.Fecha.ToString("dd/MM/yyyy hh:mm tt", CultureInfo.GetCultureInfo("en-US")) · @(citaLocal.TipoCita ?? "Cita") · Estado: @citaLocal.Estado</span>
+                    }
+                </div>
+            }
+
+            <h3>Motivo de consulta</h3>
+            <p class="consulta-detail-text">@(string.IsNullOrWhiteSpace(_detalle.Motivo) ? "No especificado." : _detalle.Motivo)</p>
+
+            <h3>Diagnóstico</h3>
+            <p class="consulta-detail-text">@(string.IsNullOrWhiteSpace(_detalle.Diagnostico) ? "Sin diagnóstico registrado." : _detalle.Diagnostico)</p>
+
+            <h3>Observaciones / Evaluación clínica</h3>
+            <p class="consulta-detail-text">@(string.IsNullOrWhiteSpace(_detalle.Observaciones) ? "Sin observaciones registradas." : _detalle.Observaciones)</p>
+
+            @if (_confirmandoEliminar)
+            {
+                <div class="consulta-delete-confirm" role="alert">
+                    <span>¿Seguro que deseas eliminar la consulta #@_detalle.ConsultaId? Esta acción no se puede deshacer.</span>
+                    <div>
+                        <button type="button" class="consulta-danger-btn" disabled="@_eliminando" @onclick="EliminarDetalleAsync">
+                            @(_eliminando ? "Eliminando…" : "Confirmar eliminación")
+                        </button>
+                        <button type="button" class="med-secondary" disabled="@_eliminando" @onclick="() => _confirmandoEliminar = false">
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
+            }
+
+            <footer class="consulta-detail-footer">
+                <div class="consulta-detail-workflow">
+                    <button type="button" class="med-primary" @onclick="() => IrAReceta(_detalle)">
+                        <i class="fa-solid fa-prescription-bottle-medical"></i> Emitir receta
+                    </button>
+                    <button type="button" class="med-primary consulta-btn-mauve" @onclick="() => IrACirugia(_detalle)">
+                        <i class="fa-solid fa-user-doctor"></i> Programar cirugía
+                    </button>
+                    <button type="button" class="med-secondary" @onclick="() => IrAExpediente(_detalle.PacienteId)">
+                        <i class="fa-solid fa-file-medical"></i> Ver expediente
+                    </button>
+                </div>
+
+                <div class="consulta-detail-manage">
+                    <button type="button" class="med-secondary" @onclick="EditarDesdeDetalle">Editar</button>
+                    @if (!_confirmandoEliminar)
+                    {
+                        <button type="button" class="consulta-danger-outline" @onclick="() => _confirmandoEliminar = true">Eliminar</button>
+                    }
+                </div>
+            </footer>
+        </section>
+    </div>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "pacienteId")]
+    public int? PacienteIdQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "citaId")]
+    public int? CitaIdQuery { get; set; }
+
+    private List<ConsultaDto> _consultas = new();
+    private List<PacienteSelectorDto> _pacientes = new();
+    private List<CitaResumenDto> _citas = new();
+
+    private ConsultaForm? _form;
+    private string _fechaTexto = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+    private string _horaTexto = DateTime.Now.ToString("HH:mm", CultureInfo.InvariantCulture);
+
+    private ConsultaDto? _detalle;
+    private bool _loading = true;
+    private bool _saving;
+    private bool _cargandoDetalle;
+    private bool _confirmandoEliminar;
+    private bool _eliminando;
+    private bool _queryAplicada;
+
+    private string _buscar = "";
+    private int _pacienteFiltro;
+    private string _periodoFiltro = "todas";
+
+    private string? _error;
+    private string? _success;
+    private string? _formError;
+    private string? _detalleError;
+
+    private bool HayFiltrosActivos =>
+        !string.IsNullOrWhiteSpace(_buscar) || _pacienteFiltro > 0 || _periodoFiltro != "todas";
+
+    private List<CitaResumenDto> CitasDeHoyActivas => _citas
+        .Where(c => c.Fecha.Date == DateTime.Today && !string.Equals(c.Estado, "Cancelada", StringComparison.OrdinalIgnoreCase))
+        .OrderBy(c => c.Fecha)
+        .ToList();
+
+    private List<ConsultaDto> ConsultasVisibles
+    {
+        get
+        {
+            var termino = _buscar.Trim();
+            var hoy = DateTime.Today;
+
+            return _consultas
+                .Where(c => _pacienteFiltro == 0 || c.PacienteId == _pacienteFiltro)
+                .Where(c => _periodoFiltro switch
+                {
+                    "hoy" => c.Fecha.Date == hoy,
+                    "semana" => c.Fecha.Date >= hoy.AddDays(-6) && c.Fecha.Date <= hoy,
+                    "mes" => c.Fecha.Year == hoy.Year && c.Fecha.Month == hoy.Month,
+                    _ => true
+                })
+                .Where(c => string.IsNullOrWhiteSpace(termino) || CoincideBusqueda(c, termino))
+                .OrderByDescending(c => c.Fecha)
+                .ThenByDescending(c => c.ConsultaId)
+                .ToList();
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarDatosAsync();
+        AplicarParametrosIniciales();
+    }
+
+    private async Task CargarDatosAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var consultasTask = Http.GetFromJsonAsync<Envelope<List<ConsultaDto>>>("api/Consultas");
+            var pacientesTask = Http.GetFromJsonAsync<Envelope<List<PacienteSelectorDto>>>("api/Pacientes/expediente/selector");
+            var citasTask = CargarCitasSeguroAsync();
+
+            await Task.WhenAll(consultasTask, pacientesTask, citasTask);
+
+            _consultas = (await consultasTask)?.Value ?? new();
+            _pacientes = (await pacientesTask)?.Value ?? new();
+            _citas = await citasTask;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException)
+        {
+            _error = "No se pudo cargar el historial de consultas. Verifica que la API esté disponible.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task<List<CitaResumenDto>> CargarCitasSeguroAsync()
+    {
+        try
+        {
+            var result = await Http.GetFromJsonAsync<Envelope<List<CitaResumenDto>>>("api/Citas");
+            return result?.Value ?? new();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException)
+        {
+            return new();
+        }
+    }
+
+    private void AplicarParametrosIniciales()
+    {
+        if (_queryAplicada) return;
+        _queryAplicada = true;
+
+        if (PacienteIdQuery is int pid && pid > 0 && _pacientes.Any(p => p.PacienteId == pid))
+        {
+            NuevaConsulta();
+            _form!.PacienteId = pid;
+
+            if (CitaIdQuery is int cid && cid > 0 && _citas.Any(c => c.CitaId == cid && c.PacienteId == pid))
+                _form.CitaId = cid;
+        }
+    }
+
+    private bool CoincideBusqueda(ConsultaDto consulta, string termino)
+    {
+        var nombre = NombrePaciente(consulta);
+        var cedula = CedulaPaciente(consulta) ?? "";
+        var motivo = consulta.Motivo ?? "";
+        var diagnostico = consulta.Diagnostico ?? "";
+
+        return nombre.Contains(termino, StringComparison.OrdinalIgnoreCase)
+            || cedula.Contains(termino, StringComparison.OrdinalIgnoreCase)
+            || motivo.Contains(termino, StringComparison.OrdinalIgnoreCase)
+            || diagnostico.Contains(termino, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void AlternarFormulario()
+    {
+        if (_form is not null)
+        {
+            CancelarFormulario();
+            return;
+        }
+        NuevaConsulta();
+    }
+
+    private void NuevaConsulta()
+    {
+        _formError = null;
+        _success = null;
+        var ahora = DateTime.Now;
+        _fechaTexto = ahora.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        _horaTexto = ahora.ToString("HH:mm", CultureInfo.InvariantCulture);
+        _form = new ConsultaForm { PacienteId = 0 };
+    }
+
+    private void EditarConsulta(ConsultaDto consulta)
+    {
+        _formError = null;
+        _success = null;
+        _fechaTexto = consulta.Fecha.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        _horaTexto = consulta.Fecha.ToString("HH:mm", CultureInfo.InvariantCulture);
+        _form = new ConsultaForm
+        {
+            ConsultaId = consulta.ConsultaId,
+            PacienteId = consulta.PacienteId,
+            CitaId = consulta.CitaId,
+            Motivo = consulta.Motivo ?? "",
+            Diagnostico = consulta.Diagnostico ?? "",
+            Observaciones = consulta.Observaciones ?? ""
+        };
+    }
+
+    private void CancelarFormulario()
+    {
+        _form = null;
+        _formError = null;
+    }
+
+    private void CambiarPaciente(ChangeEventArgs args)
+    {
+        if (_form is null) return;
+        _form.PacienteId = int.TryParse(args.Value?.ToString(), out var pacienteId) ? pacienteId : 0;
+
+        if (_form.CitaId is int citaId)
+        {
+            var pertenece = _citas.Any(c => c.CitaId == citaId && c.PacienteId == _form.PacienteId);
+            if (!pertenece) _form.CitaId = null;
+        }
+    }
+
+    private void CambiarCita(ChangeEventArgs args)
+    {
+        if (_form is null) return;
+        if (int.TryParse(args.Value?.ToString(), out var citaId) && citaId > 0)
+        {
+            _form.CitaId = citaId;
+            var cita = _citas.FirstOrDefault(c => c.CitaId == citaId);
+            if (cita is not null && string.IsNullOrWhiteSpace(_form.Motivo) && !string.IsNullOrWhiteSpace(cita.TipoCita))
+                _form.Motivo = cita.TipoCita.Trim();
+        }
+        else
+        {
+            _form.CitaId = null;
+        }
+    }
+
+    private void SeleccionarCitaRapida(CitaResumenDto cita)
+    {
+        if (_form is null) return;
+        _form.PacienteId = cita.PacienteId;
+        _form.CitaId = cita.CitaId;
+        _fechaTexto = cita.Fecha.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        _horaTexto = DateTime.Now.ToString("HH:mm", CultureInfo.InvariantCulture);
+        if (string.IsNullOrWhiteSpace(_form.Motivo) && !string.IsNullOrWhiteSpace(cita.TipoCita))
+            _form.Motivo = cita.TipoCita.Trim();
+    }
+
+    private void CambiarFecha(ChangeEventArgs args) => _fechaTexto = args.Value?.ToString() ?? "";
+    private void CambiarHora(ChangeEventArgs args) => _horaTexto = args.Value?.ToString() ?? "";
+
+    private List<CitaResumenDto> CitasDeHoyPaciente(int pacienteId) => _citas
+        .Where(c => c.PacienteId == pacienteId
+            && c.Fecha.Date == DateTime.Today
+            && (!string.Equals(c.Estado, "Cancelada", StringComparison.OrdinalIgnoreCase) || c.CitaId == _form?.CitaId))
+        .OrderBy(c => c.Fecha)
+        .ToList();
+
+    private List<CitaResumenDto> OtrasCitasPaciente(int pacienteId) => _citas
+        .Where(c => c.PacienteId == pacienteId
+            && c.Fecha.Date != DateTime.Today
+            && (!string.Equals(c.Estado, "Cancelada", StringComparison.OrdinalIgnoreCase) || c.CitaId == _form?.CitaId))
+        .OrderByDescending(c => c.Fecha)
+        .Take(15)
+        .ToList();
+
+    private static string EtiquetaCita(CitaResumenDto cita)
+    {
+        var fecha = cita.Fecha.Date == DateTime.Today
+            ? $"Hoy {cita.Fecha.ToString("hh:mm tt", CultureInfo.GetCultureInfo("en-US"))}"
+            : cita.Fecha.ToString("dd/MM/yyyy hh:mm tt", CultureInfo.GetCultureInfo("en-US"));
+        var tipo = string.IsNullOrWhiteSpace(cita.TipoCita) ? "Cita" : cita.TipoCita;
+        return $"#{cita.CitaId} · {fecha} · {tipo} ({cita.Estado})";
+    }
+
+    private string NombrePacienteCita(CitaResumenDto cita)
+    {
+        if (cita.Paciente is not null && !string.IsNullOrWhiteSpace(cita.Paciente.Nombre))
+            return $"{cita.Paciente.Nombre} {cita.Paciente.Apellido}".Trim();
+        var p = _pacientes.FirstOrDefault(x => x.PacienteId == cita.PacienteId);
+        return p is null ? $"Paciente #{cita.PacienteId}" : $"{p.Nombre} {p.Apellido}".Trim();
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (_form is null) return;
+        _formError = null;
+        _success = null;
+
+        if (_form.PacienteId <= 0)
+        {
+            _formError = "Selecciona un paciente para registrar la consulta.";
+            return;
+        }
+
+        if (!DateTime.TryParseExact(_fechaTexto, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var fecha))
+        {
+            _formError = "Indica una fecha válida para la consulta.";
+            return;
+        }
+
+        var hora = TimeSpan.TryParseExact(_horaTexto, @"hh\:mm", CultureInfo.InvariantCulture, out var parsedHora)
+            ? parsedHora
+            : DateTime.Now.TimeOfDay;
+        var fechaConsulta = fecha.Date.Add(new TimeSpan(hora.Hours, hora.Minutes, 0));
+
+        var motivo = Limpiar(_form.Motivo);
+        var diagnostico = Limpiar(_form.Diagnostico);
+        var observaciones = Limpiar(_form.Observaciones);
+
+        if (string.IsNullOrWhiteSpace(motivo))
+        {
+            _formError = "Indica el motivo de la consulta.";
+            return;
+        }
+
+        if (motivo.Length > 250)
+        {
+            _formError = "El motivo de la consulta no puede exceder los 250 caracteres.";
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var esNueva = _form.ConsultaId == 0;
+            var payload = new
+            {
+                ConsultaId = _form.ConsultaId,
+                Fecha = fechaConsulta,
+                PacienteId = _form.PacienteId,
+                CitaId = _form.CitaId is > 0 ? _form.CitaId : (int?)null,
+                Motivo = motivo,
+                Diagnostico = diagnostico,
+                Observaciones = observaciones
+            };
+
+            using var response = await Http.PostAsJsonAsync("api/Consultas", payload);
+            if (!response.IsSuccessStatusCode)
+            {
+                _formError = await ExtraerErrorAsync(response, "No se pudo guardar la consulta.");
+                return;
+            }
+
+            _form = null;
+            _success = esNueva ? "Consulta médica registrada correctamente." : "Consulta médica actualizada correctamente.";
+            var refreshed = await Http.GetFromJsonAsync<Envelope<List<ConsultaDto>>>("api/Consultas");
+            _consultas = refreshed?.Value ?? new();
+        }
+        catch (HttpRequestException)
+        {
+            _formError = "No se pudo conectar con la API para guardar la consulta.";
+        }
+        catch (JsonException)
+        {
+            _formError = "La respuesta del servidor no tiene el formato esperado.";
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task AbrirDetalleConTeclaAsync(ConsultaDto consulta, KeyboardEventArgs args)
+    {
+        if (args.Key is "Enter" or " ")
+            await AbrirDetalleAsync(consulta);
+    }
+
+    private async Task AbrirDetalleAsync(ConsultaDto consulta)
+    {
+        _detalle = consulta;
+        _detalleError = null;
+        _confirmandoEliminar = false;
+        _cargandoDetalle = true;
+
+        try
+        {
+            var result = await Http.GetFromJsonAsync<Envelope<ConsultaDto>>($"api/Consultas/{consulta.ConsultaId}");
+            if (result?.Value is not null)
+                _detalle = result.Value;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException)
+        {
+            _detalleError = "No se pudo actualizar toda la información desde el servidor; se muestran los datos cargados.";
+        }
+        finally
+        {
+            _cargandoDetalle = false;
+        }
+    }
+
+    private void CerrarDetalle()
+    {
+        if (_eliminando) return;
+        _detalle = null;
+        _detalleError = null;
+        _confirmandoEliminar = false;
+    }
+
+    private void EditarDesdeDetalle()
+    {
+        if (_detalle is null) return;
+        var seleccionada = _detalle;
+        CerrarDetalle();
+        EditarConsulta(seleccionada);
+    }
+
+    private async Task EliminarDetalleAsync()
+    {
+        if (_detalle is null) return;
+        _eliminando = true;
+        _detalleError = null;
+
+        try
+        {
+            var id = _detalle.ConsultaId;
+            using var response = await Http.DeleteAsync($"api/Consultas/{id}");
+            if (!response.IsSuccessStatusCode)
+            {
+                _detalleError = await ExtraerErrorAsync(response, "No se pudo eliminar la consulta.");
+                _confirmandoEliminar = false;
+                return;
+            }
+
+            _detalle = null;
+            _confirmandoEliminar = false;
+            _success = $"Consulta #{id} eliminada correctamente.";
+            var refreshed = await Http.GetFromJsonAsync<Envelope<List<ConsultaDto>>>("api/Consultas");
+            _consultas = refreshed?.Value ?? new();
+        }
+        catch (HttpRequestException)
+        {
+            _detalleError = "No se pudo conectar con la API para eliminar la consulta.";
+        }
+        finally
+        {
+            _eliminando = false;
+        }
+    }
+
+    private void LimpiarFiltros()
+    {
+        _buscar = "";
+        _pacienteFiltro = 0;
+        _periodoFiltro = "todas";
+    }
+
+    private void IrAReceta(ConsultaDto consulta) =>
+        Navigation.NavigateTo($"/recetas?pacienteId={consulta.PacienteId}&consultaId={consulta.ConsultaId}");
+
+    private void IrACirugia(ConsultaDto consulta) =>
+        Navigation.NavigateTo($"/cirugias?pacienteId={consulta.PacienteId}&consultaId={consulta.ConsultaId}");
+
+    private void IrAExpediente(int pacienteId) =>
+        Navigation.NavigateTo($"/pacientes/expediente/{pacienteId}");
+
+    private string NombrePaciente(ConsultaDto consulta)
+    {
+        if (consulta.Paciente is not null && (!string.IsNullOrWhiteSpace(consulta.Paciente.Nombre) || !string.IsNullOrWhiteSpace(consulta.Paciente.Apellido)))
+            return $"{consulta.Paciente.Nombre} {consulta.Paciente.Apellido}".Trim();
+
+        var p = _pacientes.FirstOrDefault(x => x.PacienteId == consulta.PacienteId);
+        return p is null ? $"Paciente #{consulta.PacienteId}" : $"{p.Nombre} {p.Apellido}".Trim();
+    }
+
+    private string? CedulaPaciente(ConsultaDto consulta)
+    {
+        if (!string.IsNullOrWhiteSpace(consulta.Paciente?.Cedula))
+            return consulta.Paciente!.Cedula;
+        return _pacientes.FirstOrDefault(x => x.PacienteId == consulta.PacienteId)?.Cedula;
+    }
+
+    private string InicialesPaciente(ConsultaDto consulta)
+    {
+        var partes = NombrePaciente(consulta).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (partes.Length == 0) return "P";
+        if (partes.Length == 1) return partes[0][..1].ToUpperInvariant();
+        return $"{partes[0][..1]}{partes[1][..1]}".ToUpperInvariant();
+    }
+
+    private static string ResumirTexto(string texto, int maximo)
+    {
+        var limpio = texto.Trim();
+        return limpio.Length <= maximo ? limpio : limpio[..maximo].TrimEnd() + "…";
+    }
+
+    private static string? Limpiar(string? valor) => string.IsNullOrWhiteSpace(valor) ? null : valor.Trim();
+
+    private static async Task<string> ExtraerErrorAsync(HttpResponseMessage response, string fallback)
+    {
+        var body = await response.Content.ReadAsStringAsync();
+        if (string.IsNullOrWhiteSpace(body)) return $"{fallback} (HTTP {(int)response.StatusCode}).";
+
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+            if (root.ValueKind == JsonValueKind.Object)
+            {
+                if (TryGetProp(root, "error") is { ValueKind: JsonValueKind.Object } err)
+                {
+                    var desc = TryGetString(err, "description") ?? TryGetString(err, "message") ?? TryGetString(err, "code");
+                    if (!string.IsNullOrWhiteSpace(desc)) return desc;
+                }
+                var msg = TryGetString(root, "message") ?? TryGetString(root, "detail") ?? TryGetString(root, "title");
+                if (!string.IsNullOrWhiteSpace(msg)) return msg;
+            }
+        }
+        catch (JsonException) { }
+
+        return $"{fallback} (HTTP {(int)response.StatusCode}).";
+    }
+
+    private static JsonElement? TryGetProp(JsonElement obj, string name)
+    {
+        foreach (var p in obj.EnumerateObject())
+            if (p.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+                return p.Value;
+        return null;
+    }
+
+    private static string? TryGetString(JsonElement obj, string name) =>
+        TryGetProp(obj, name) is { ValueKind: JsonValueKind.String } el ? el.GetString() : null;
+
+    private sealed class Envelope<T>
+    {
+        public T? Value { get; set; }
+    }
+
+    private sealed class PacienteSelectorDto
+    {
+        public int PacienteId { get; set; }
+        public string Nombre { get; set; } = "";
+        public string Apellido { get; set; } = "";
+        public string? Cedula { get; set; }
+    }
+
+    private sealed class PacienteConsultaDto
+    {
+        public int PacienteId { get; set; }
+        public string Nombre { get; set; } = "";
+        public string Apellido { get; set; } = "";
+        public string? Cedula { get; set; }
+        public string? Telefono { get; set; }
+        public string? Email { get; set; }
+    }
+
+    private sealed class CitaResumenDto
+    {
+        public int CitaId { get; set; }
+        public DateTime Fecha { get; set; }
+        public int PacienteId { get; set; }
+        public string? TipoCita { get; set; }
+        public string Estado { get; set; } = "";
+        public PacienteConsultaDto? Paciente { get; set; }
+    }
+
+    private sealed class ConsultaDto
+    {
+        public int ConsultaId { get; set; }
+        public DateTime Fecha { get; set; }
+        public int PacienteId { get; set; }
+        public int? CitaId { get; set; }
+        public string? Motivo { get; set; }
+        public string? Diagnostico { get; set; }
+        public string? Observaciones { get; set; }
+        public PacienteConsultaDto? Paciente { get; set; }
+        public CitaResumenDto? Cita { get; set; }
+    }
+
+    private sealed class ConsultaForm
+    {
+        public int ConsultaId { get; set; }
+        public int PacienteId { get; set; }
+        public int? CitaId { get; set; }
+        public string Motivo { get; set; } = "";
+        public string Diagnostico { get; set; } = "";
+        public string Observaciones { get; set; } = "";
+    }
+}
