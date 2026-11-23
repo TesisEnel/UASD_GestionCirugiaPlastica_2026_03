@@ -55,9 +55,9 @@
                     <ValidationSummary />
                     <div class="account-form-grid">
                         <label>Nombre completo *<InputText @bind-Value="_form.NombreCompleto" autocomplete="name" /></label>
-                        <label>Nombre de usuario<InputText Value="_profile.NombreUsuario" disabled /></label>
-                        <label>Correo electrónico<InputText Value="_profile.Email" disabled /></label>
-                        <label>Rol<InputText Value="_profile.Rol" disabled /></label>
+                        <label>Nombre de usuario<input type="text" value="@_profile.NombreUsuario" disabled /></label>
+                        <label>Correo electrónico<input type="text" value="@_profile.Email" disabled /></label>
+                        <label>Rol<input type="text" value="@_profile.Rol" disabled /></label>
                     </div>
 
                     <h3>Cambiar contraseña <span>(opcional)</span></h3>
@@ -211,9 +211,16 @@
 
     private string FotoSource(string fotoUrl)
     {
-        if (Uri.TryCreate(fotoUrl, UriKind.Absolute, out var absolute))
+        if (Uri.TryCreate(fotoUrl, UriKind.Absolute, out var absolute) &&
+            (absolute.Scheme == Uri.UriSchemeHttp || absolute.Scheme == Uri.UriSchemeHttps))
+        {
             return absolute.ToString();
-        return new Uri(Http.BaseAddress!, fotoUrl).ToString();
+        }
+
+        if (Http.BaseAddress is not null)
+            return new Uri(Http.BaseAddress, fotoUrl).ToString();
+
+        return fotoUrl;
     }
 
     private static async Task<string> ReadErrorAsync(HttpResponseMessage response)
