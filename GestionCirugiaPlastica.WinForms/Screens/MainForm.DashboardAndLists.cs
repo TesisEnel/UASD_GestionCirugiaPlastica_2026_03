@@ -8,6 +8,12 @@ internal sealed partial class MainForm
 {
     private async Task ShowDashboard()
     {
+        if (_api.IsAssistant)
+        {
+            await ShowClinicalDashboard();
+            return;
+        }
+
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Padding = new Padding(0, 8, 0, 0), BackColor = Color.Transparent };
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 125));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 86));
@@ -82,6 +88,60 @@ internal sealed partial class MainForm
         {
             dashboardStatus.ForeColor = Color.Firebrick; dashboardStatus.Text = "No se pudo cargar el resumen desde la API. " + UserMessage(ex);
             ((Label)patientsCard.Tag!).Text = ((Label)newPatientsCard.Tag!).Text = ((Label)appointmentsCard.Tag!).Text = ((Label)revenueCard.Tag!).Text = "—";
+        }
+    }
+
+    private async Task ShowClinicalDashboard()
+    {
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Padding = new Padding(0, 8, 0, 0), BackColor = Color.Transparent };
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 125));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        var status = new Label { Text = "Consultando información clínica…", Dock = DockStyle.Fill, ForeColor = Taupe, TextAlign = ContentAlignment.MiddleLeft };
+        var metrics = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, AutoScroll = true, BackColor = Color.Transparent };
+        var patientsCard = DashboardMetric("Pacientes accesibles", "—", "Selector clínico autorizado");
+        var appointmentsCard = DashboardMetric("Citas próximas", "—", "En los próximos 7 días");
+        var surgeriesCard = DashboardMetric("Cirugías programadas", "—", "Seguimiento clínico");
+        var recipesCard = DashboardMetric("Recetas", "—", "Registros disponibles");
+        foreach (var card in new[] { patientsCard, appointmentsCard, surgeriesCard, recipesCard }) metrics.Controls.Add(card);
+        metrics.SizeChanged += (_, _) => { var width = Math.Max(145, (metrics.ClientSize.Width - 40) / 4); foreach (Control item in metrics.Controls) item.Width = width; };
+
+        var surgeriesCardList = DashboardCard("Cirugías recientes", "Seguimiento de procedimientos");
+        var surgeriesGrid = CreateGrid(); surgeriesGrid.Dock = DockStyle.Fill; surgeriesCardList.Controls.Add(surgeriesGrid);
+        var appointmentsCardList = DashboardCard("Citas recientes", "Actividad clínica de agenda");
+        var appointmentsGrid = CreateGrid(); appointmentsGrid.Dock = DockStyle.Fill; appointmentsCardList.Controls.Add(appointmentsGrid);
+        var lists = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, BackColor = Color.Transparent };
+        lists.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55)); lists.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45));
+        lists.Controls.Add(surgeriesCardList, 0, 0); lists.Controls.Add(appointmentsCardList, 1, 0);
+        layout.Controls.Add(metrics, 0, 0); layout.Controls.Add(lists, 0, 1); layout.Controls.Add(status, 0, 2);
+        _pageContent.Controls.Add(layout); _pageContent.Controls.SetChildIndex(layout, 1);
+
+        try
+        {
+            var patientsTask = _api.GetAsync<List<ApiPaciente>>("api/Pacientes/expediente/selector");
+            var appointmentsTask = _api.GetAsync<List<ApiCita>>("api/Citas");
+            var surgeriesTask = _api.GetAsync<List<ApiCirugia>>("api/Cirugias");
+            var recipesTask = _api.GetAsync<List<ApiReceta>>("api/Recetas");
+            await Task.WhenAll(patientsTask, appointmentsTask, surgeriesTask, recipesTask);
+            var patients = await patientsTask;
+            var appointments = await appointmentsTask;
+            var surgeries = await surgeriesTask;
+            var recipes = await recipesTask;
+
+            ((Label)patientsCard.Tag!).Text = patients.Count.ToString(CultureInfo.CurrentCulture);
+            ((Label)appointmentsCard.Tag!).Text = appointments.Count(c => c.Fecha >= DateTime.Now && c.Fecha <= DateTime.Now.AddDays(7) && !string.Equals(c.Estado, "Cancelada", StringComparison.OrdinalIgnoreCase)).ToString(CultureInfo.CurrentCulture);
+            ((Label)surgeriesCard.Tag!).Text = surgeries.Count(s => string.Equals(s.Estado, "Programada", StringComparison.OrdinalIgnoreCase) && s.FechaCirugia >= DateTime.Today).ToString(CultureInfo.CurrentCulture);
+            ((Label)recipesCard.Tag!).Text = recipes.Count.ToString(CultureInfo.CurrentCulture);
+            surgeriesGrid.DataSource = surgeries.OrderByDescending(s => s.FechaCirugia).Take(6).Select(s => new { Cirugía = s.CirugiaId, Paciente = s.Paciente is null ? $"#{s.PacienteId}" : $"{s.Paciente.Nombre} {s.Paciente.Apellido}", Procedimiento = s.Procedimiento?.Nombre, Fecha = FormatDateTime12(s.FechaCirugia), s.Estado }).ToList();
+            appointmentsGrid.DataSource = appointments.OrderByDescending(c => c.Fecha).Take(6).Select(c => new { Cita = c.CitaId, Paciente = c.Paciente is null ? $"#{c.PacienteId}" : $"{c.Paciente.Nombre} {c.Paciente.Apellido}", Fecha = FormatDateTime12(c.Fecha), Motivo = c.TipoCita, c.Estado }).ToList();
+            _calendarAppointments = appointments;
+            RefreshRightCalendar();
+            status.Text = "Resumen clínico cargado desde los endpoints autorizados.";
+        }
+        catch (Exception ex)
+        {
+            status.ForeColor = Color.Firebrick; status.Text = "No se pudo cargar el resumen clínico. " + UserMessage(ex);
+            ((Label)patientsCard.Tag!).Text = ((Label)appointmentsCard.Tag!).Text = ((Label)surgeriesCard.Tag!).Text = ((Label)recipesCard.Tag!).Text = "—";
         }
     }
 
