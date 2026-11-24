@@ -67,7 +67,7 @@ jobs:
           export PATH="$PATH:$HOME/.dotnet/tools"
           dotnet sonarscanner begin \
             /o:"tesisenel" \
-            /k:"TesisEnel_UASD_GestionCirugiaPlastica_2026_03" \
+            /k:"GestionCirugiaPlastica_ProyectoFinal" \
             /d:sonar.token="${SONAR_TOKEN}" \
             /d:sonar.host.url="https://sonarcloud.io"
 
