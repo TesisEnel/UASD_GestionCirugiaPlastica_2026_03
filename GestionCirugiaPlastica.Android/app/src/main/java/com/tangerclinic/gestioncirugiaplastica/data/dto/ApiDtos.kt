@@ -219,3 +219,34 @@ data class NotificacionDto(
 data class UnreadCountDto(
     @SerializedName("count") val count: Int = 0
 )
+
+// ── Cirugías y Fotografías Clínicas (CirugiasController / FotografiasController) ──
+
+data class ProcedimientoResumenDto(
+    @SerializedName("procedimientoId") val procedimientoId: Int = 0,
+    @SerializedName("nombre") val nombre: String = ""
+)
+
+data class CirugiaDto(
+    @SerializedName("cirugiaId") val cirugiaId: Int = 0,
+    @SerializedName("fechaCirugia") val fechaCirugia: String = "",
+    @SerializedName("pacienteId") val pacienteId: Int = 0,
+    @SerializedName("procedimientoId") val procedimientoId: Int = 0,
+    @SerializedName("diagnosticoPreoperatorio") val diagnosticoPreoperatorio: String? = null,
+    @SerializedName("observaciones") val observaciones: String? = null,
+    @SerializedName("estado") val estado: String = "",
+    @SerializedName("paciente") val paciente: PacienteDto? = null,
+    @SerializedName("procedimiento") val procedimiento: ProcedimientoResumenDto? = null
+) {
+    val procedimientoNombre: String
+        get() = procedimiento?.nombre?.takeIf { it.isNotBlank() } ?: "Cirugía #$cirugiaId"
+}
+
+data class FotografiaDto(
+    @SerializedName("fotografiaId") val fotografiaId: Int = 0,
+    @SerializedName("cirugiaId") val cirugiaId: Int = 0,
+    @SerializedName("fecha") val fecha: String = "",
+    @SerializedName("tipo") val tipo: String? = null,
+    @SerializedName("rutaArchivo") val rutaArchivo: String? = null,
+    @SerializedName("descripcion") val descripcion: String? = null
+)

@@ -27,13 +27,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.HowToReg
 import androidx.compose.material.icons.filled.MedicalServices
 import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
@@ -77,6 +80,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -115,14 +119,17 @@ fun StaffPanelScreen(
 ) {
     val role = session.role ?: ClinicRole.DOCTORA
     val state by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
 
     val tabs = remember(role) {
         buildList {
+            add(StaffTabItem("checkin", "Check-in", Icons.Default.HowToReg))
             add(StaffTabItem("agenda", "Agenda", Icons.Default.CalendarToday))
             add(StaffTabItem("pacientes", "Pacientes", Icons.Default.People))
             if (role.isClinical) {
                 add(StaffTabItem("consultas", "Consultas", Icons.Default.MedicalServices))
                 add(StaffTabItem("recetas", "Recetas", Icons.Default.Medication))
+                add(StaffTabItem("fotos", "Fotos", Icons.Default.PhotoCamera))
             }
         }
     }
@@ -130,6 +137,14 @@ fun StaffPanelScreen(
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     var showNotificationsDialog by remember { mutableStateOf(false) }
     var showNewConsultaDialog by remember { mutableStateOf(false) }
+    var showClinicalPhotoDialog by remember { mutableStateOf(false) }
+    var photoModalInitialPacienteId by remember { mutableStateOf<Int?>(null) }
+
+    val openClinicalPhotoModal: (Int?) -> Unit = { pacienteId ->
+        photoModalInitialPacienteId = pacienteId
+        viewModel.clearPhotoModalError()
+        showClinicalPhotoDialog = true
+    }
 
     LaunchedEffect(role) {
         viewModel.loadAll(role)
@@ -157,6 +172,15 @@ fun StaffPanelScreen(
                     }
                 },
                 actions = {
+                    if (role.isClinical) {
+                        IconButton(onClick = { openClinicalPhotoModal(null) }) {
+                            Icon(
+                                imageVector = Icons.Default.AddAPhoto,
+                                contentDescription = "Fotografía Clínica",
+                                tint = TangerWhite
+                            )
+                        }
+                    }
                     if (role == ClinicRole.DOCTORA) {
                         IconButton(
                             onClick = {
@@ -203,6 +227,14 @@ fun StaffPanelScreen(
                 ) {
                     Icon(Icons.Default.Add, contentDescription = "Nueva consulta")
                 }
+            } else if (currentTab.id == "fotos" && role.isClinical) {
+                FloatingActionButton(
+                    onClick = { openClinicalPhotoModal(null) },
+                    containerColor = TangerWine,
+                    contentColor = TangerWhite
+                ) {
+                    Icon(Icons.Default.AddAPhoto, contentDescription = "Nueva fotografía clínica")
+                }
             }
         },
         bottomBar = {
@@ -212,7 +244,7 @@ fun StaffPanelScreen(
                         selected = safeTabIndex == index,
                         onClick = { selectedTabIndex = index },
                         icon = { Icon(item.icon, contentDescription = item.label) },
-                        label = { Text(item.label) },
+                        label = { Text(item.label, maxLines = 1, softWrap = false) },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = TangerWine,
                             selectedTextColor = TangerWine,
@@ -252,6 +284,13 @@ fun StaffPanelScreen(
                 LoadingState()
             } else {
                 when (currentTab.id) {
+                    "checkin" -> StaffCheckInTab(
+                        state = state,
+                        canChangeStatus = role.canUpdateAppointmentStatus,
+                        onUpdateStatus = { citaId, estadoApi, label ->
+                            viewModel.cambiarEstadoCita(citaId, estadoApi, label)
+                        }
+                    )
                     "agenda" -> StaffAgendaTab(
                         citas = state.citas,
                         canChangeStatus = role.canUpdateAppointmentStatus,
@@ -262,7 +301,9 @@ fun StaffPanelScreen(
                     )
                     "pacientes" -> StaffPacientesTab(
                         pacientes = state.pacientes,
-                        showInsuranceBadge = role.canReadFullPatients
+                        showInsuranceBadge = role.canReadFullPatients,
+                        canCapturePhoto = role.isClinical,
+                        onCapturePhotoForPatient = { pacienteId -> openClinicalPhotoModal(pacienteId) }
                     )
                     "consultas" -> StaffConsultasTab(
                         consultas = state.consultas,
@@ -271,6 +312,11 @@ fun StaffPanelScreen(
                     "recetas" -> StaffRecetasTab(
                         recetas = state.recetas,
                         state = state
+                    )
+                    "fotos" -> StaffFotografiasTab(
+                        state = state,
+                        onOpenCaptureModal = openClinicalPhotoModal,
+                        onRequestThumbnail = viewModel::loadPhotoThumbnail
                     )
                 }
             }
@@ -295,6 +341,29 @@ fun StaffPanelScreen(
             onConfirm = { pacienteId, motivo, diagnostico, observaciones ->
                 viewModel.registrarConsulta(pacienteId, motivo, diagnostico, observaciones) {
                     showNewConsultaDialog = false
+                }
+            }
+        )
+    }
+
+    if (showClinicalPhotoDialog && role.isClinical) {
+        ClinicalPhotoDialog(
+            pacientes = state.pacientes,
+            cirugias = state.cirugias,
+            initialPacienteId = photoModalInitialPacienteId,
+            isUploading = state.isUploadingPhoto,
+            errorMessage = state.photoModalError,
+            onClearError = viewModel::clearPhotoModalError,
+            onDismiss = { showClinicalPhotoDialog = false },
+            onUpload = { cirugiaId, imageUri, tipo, descripcion ->
+                viewModel.subirFotografiaClinica(
+                    context = context,
+                    cirugiaId = cirugiaId,
+                    imageUri = imageUri,
+                    tipo = tipo,
+                    rawDescripcion = descripcion
+                ) {
+                    showClinicalPhotoDialog = false
                 }
             }
         )
@@ -469,7 +538,9 @@ private fun StaffAgendaTab(
 @Composable
 private fun StaffPacientesTab(
     pacientes: List<PacienteDto>,
-    showInsuranceBadge: Boolean
+    showInsuranceBadge: Boolean,
+    canCapturePhoto: Boolean,
+    onCapturePhotoForPatient: (Int) -> Unit
 ) {
     var search by remember { mutableStateOf("") }
     var onlyWithInsurance by remember { mutableStateOf(false) }
@@ -587,6 +658,15 @@ private fun StaffPacientesTab(
                             ).joinToString(" · ")
                             if (contacto.isNotBlank()) {
                                 Text(contacto, style = MaterialTheme.typography.bodyMedium, color = TangerMuted)
+                            }
+                        }
+                        if (canCapturePhoto) {
+                            IconButton(onClick = { onCapturePhotoForPatient(paciente.pacienteId) }) {
+                                Icon(
+                                    imageVector = Icons.Default.AddAPhoto,
+                                    contentDescription = "Subir fotografía clínica",
+                                    tint = TangerWine
+                                )
                             }
                         }
                     }

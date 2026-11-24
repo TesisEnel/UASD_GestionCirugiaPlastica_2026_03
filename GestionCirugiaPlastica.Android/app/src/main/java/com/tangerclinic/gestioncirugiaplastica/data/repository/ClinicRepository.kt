@@ -2,9 +2,11 @@ package com.tangerclinic.gestioncirugiaplastica.data.repository
 
 import com.google.gson.JsonParser
 import com.tangerclinic.gestioncirugiaplastica.data.dto.CancelacionPublicaRequest
+import com.tangerclinic.gestioncirugiaplastica.data.dto.CirugiaDto
 import com.tangerclinic.gestioncirugiaplastica.data.dto.CitaDto
 import com.tangerclinic.gestioncirugiaplastica.data.dto.ConsultaDto
 import com.tangerclinic.gestioncirugiaplastica.data.dto.CrearConsultaRequest
+import com.tangerclinic.gestioncirugiaplastica.data.dto.FotografiaDto
 import com.tangerclinic.gestioncirugiaplastica.data.dto.LoginRequest
 import com.tangerclinic.gestioncirugiaplastica.data.dto.NoticiaDto
 import com.tangerclinic.gestioncirugiaplastica.data.dto.NotificacionDto
@@ -21,6 +23,9 @@ import com.tangerclinic.gestioncirugiaplastica.data.network.ApiClient
 import com.tangerclinic.gestioncirugiaplastica.data.network.ClinicApiService
 import com.tangerclinic.gestioncirugiaplastica.data.network.ClinicRole
 import com.tangerclinic.gestioncirugiaplastica.data.network.SessionManager
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import retrofit2.Response
 import java.io.IOException
 
@@ -229,6 +234,69 @@ class ClinicRepository(
             ApiResult.Error(extractError(response, "No se pudieron cargar las recetas."))
         } else {
             ApiResult.Success(response.body()?.value.orEmpty())
+        }
+    }
+
+    // ── Cirugías y Fotografías Clínicas (Doctora y AsistenteClinico) ────────
+
+    suspend fun getCirugias(): ApiResult<List<CirugiaDto>> = safeCall {
+        val response = api.getCirugias()
+        if (!response.isSuccessful) {
+            ApiResult.Error(extractError(response, "No se pudieron cargar las cirugías."))
+        } else {
+            ApiResult.Success(response.body()?.value.orEmpty())
+        }
+    }
+
+    suspend fun getFotografias(): ApiResult<List<FotografiaDto>> = safeCall {
+        val response = api.getFotografias()
+        if (!response.isSuccessful) {
+            ApiResult.Error(extractError(response, "No se pudieron cargar las fotografías clínicas."))
+        } else {
+            ApiResult.Success(response.body()?.value.orEmpty())
+        }
+    }
+
+    suspend fun getFotografiasPorCirugia(cirugiaId: Int): ApiResult<List<FotografiaDto>> = safeCall {
+        val response = api.getFotografiasPorCirugia(cirugiaId)
+        if (!response.isSuccessful) {
+            ApiResult.Error(extractError(response, "No se pudieron cargar las fotografías de la cirugía."))
+        } else {
+            ApiResult.Success(response.body()?.value.orEmpty())
+        }
+    }
+
+    suspend fun subirFotografiaClinica(
+        cirugiaId: Int,
+        imageBytes: ByteArray,
+        fileName: String,
+        mimeType: String,
+        descripcion: String
+    ): ApiResult<FotografiaDto> = safeCall {
+        val imageRequestBody = imageBytes.toRequestBody(mimeType.toMediaType())
+        val archivoPart = MultipartBody.Part.createFormData("archivo", fileName, imageRequestBody)
+        val descripcionBody = descripcion.toRequestBody("text/plain; charset=utf-8".toMediaType())
+
+        val response = api.subirFotografiaCirugia(
+            cirugiaId = cirugiaId,
+            archivo = archivoPart,
+            descripcion = descripcionBody
+        )
+        if (!response.isSuccessful) {
+            ApiResult.Error(extractError(response, "No se pudo subir la fotografía clínica."))
+        } else {
+            ApiResult.Success(response.body() ?: FotografiaDto(cirugiaId = cirugiaId, descripcion = descripcion))
+        }
+    }
+
+    suspend fun descargarFotografiaBytes(fotografiaId: Int): ApiResult<ByteArray> = safeCall {
+        val response = api.descargarArchivoFotografia(fotografiaId)
+        if (!response.isSuccessful) {
+            ApiResult.Error(extractError(response, "No se pudo descargar la fotografía."))
+        } else {
+            val bytes = response.body()?.bytes()
+                ?: return@safeCall ApiResult.Error("La imagen recibida está vacía.")
+            ApiResult.Success(bytes)
         }
     }
 

@@ -97,6 +97,9 @@ object ClinicDateUtils {
     fun formatDate(raw: String?): String =
         parseApiDateTime(raw)?.format(displayDateFormatter) ?: (raw ?: "—")
 
+    fun formatTime(raw: String?): String =
+        parseApiDateTime(raw)?.format(displayTimeFormatter) ?: "—"
+
     fun formatLocalDate(date: LocalDate): String = date.format(displayDateFormatter)
 
     fun formatSlot(time: LocalTime): String = time.format(displayTimeFormatter)

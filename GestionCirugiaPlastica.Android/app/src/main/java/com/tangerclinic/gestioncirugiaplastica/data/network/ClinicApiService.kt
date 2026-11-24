@@ -1,9 +1,11 @@
 package com.tangerclinic.gestioncirugiaplastica.data.network
 
 import com.tangerclinic.gestioncirugiaplastica.data.dto.CancelacionPublicaRequest
+import com.tangerclinic.gestioncirugiaplastica.data.dto.CirugiaDto
 import com.tangerclinic.gestioncirugiaplastica.data.dto.CitaDto
 import com.tangerclinic.gestioncirugiaplastica.data.dto.ConsultaDto
 import com.tangerclinic.gestioncirugiaplastica.data.dto.CrearConsultaRequest
+import com.tangerclinic.gestioncirugiaplastica.data.dto.FotografiaDto
 import com.tangerclinic.gestioncirugiaplastica.data.dto.LoginRequest
 import com.tangerclinic.gestioncirugiaplastica.data.dto.LoginResponse
 import com.tangerclinic.gestioncirugiaplastica.data.dto.MensajeResponse
@@ -21,14 +23,18 @@ import com.tangerclinic.gestioncirugiaplastica.data.dto.ResultEnvelope
 import com.tangerclinic.gestioncirugiaplastica.data.dto.SolicitudCitaPublicaRequest
 import com.tangerclinic.gestioncirugiaplastica.data.dto.SolicitudCitaPublicaResponse
 import com.tangerclinic.gestioncirugiaplastica.data.dto.UnreadCountDto
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Multipart
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.PUT
+import retrofit2.http.Part
 import retrofit2.http.Path
 
 interface ClinicApiService {
@@ -127,4 +133,30 @@ interface ClinicApiService {
 
     @PATCH("api/Notificaciones/leer-todas")
     suspend fun marcarTodasNotificacionesLeidas(): Response<Unit>
+
+    // ── CirugiasController & FotografiasController ──────────────────────────
+
+    @GET("api/Cirugias")
+    suspend fun getCirugias(): Response<ResultEnvelope<List<CirugiaDto>>>
+
+    @GET("api/Fotografias")
+    suspend fun getFotografias(): Response<ResultEnvelope<List<FotografiaDto>>>
+
+    @GET("api/Fotografias/cirugia/{cirugiaId}")
+    suspend fun getFotografiasPorCirugia(
+        @Path("cirugiaId") cirugiaId: Int
+    ): Response<ResultEnvelope<List<FotografiaDto>>>
+
+    @Multipart
+    @POST("api/Fotografias/cirugia/{cirugiaId}/archivo")
+    suspend fun subirFotografiaCirugia(
+        @Path("cirugiaId") cirugiaId: Int,
+        @Part archivo: MultipartBody.Part,
+        @Part("descripcion") descripcion: RequestBody
+    ): Response<FotografiaDto>
+
+    @GET("api/Fotografias/archivo/{id}")
+    suspend fun descargarArchivoFotografia(
+        @Path("id") fotografiaId: Int
+    ): Response<ResponseBody>
 }
