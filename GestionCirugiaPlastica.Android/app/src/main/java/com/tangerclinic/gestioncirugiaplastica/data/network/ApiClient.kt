@@ -93,20 +93,20 @@ object ApiClient {
     private fun buildCandidates(): List<EndpointCandidate> {
         val wifiHost = getWifiHost()
         val list = mutableListOf(
-            EndpointCandidate(localHttpsUrl, USB_CONNECT_TIMEOUT_SECONDS),
-            EndpointCandidate(localHttpUrl, USB_CONNECT_TIMEOUT_SECONDS)
+            EndpointCandidate(localHttpUrl, USB_CONNECT_TIMEOUT_SECONDS),
+            EndpointCandidate(localHttpsUrl, USB_CONNECT_TIMEOUT_SECONDS)
         )
-        "https://$wifiHost:7214/".toHttpUrlOrNull()?.let {
+        "http://$wifiHost:5258/".toHttpUrlOrNull()?.let {
             list.add(EndpointCandidate(it, WIFI_CONNECT_TIMEOUT_SECONDS))
         }
-        "http://$wifiHost:5258/".toHttpUrlOrNull()?.let {
+        "https://$wifiHost:7214/".toHttpUrlOrNull()?.let {
             list.add(EndpointCandidate(it, WIFI_CONNECT_TIMEOUT_SECONDS))
         }
         return list
     }
 
     val activeBaseUrl: String
-        get() = (cachedEndpoint.get() ?: localHttpsUrl).toString()
+        get() = (cachedEndpoint.get() ?: localHttpUrl).toString()
 
     fun resetEndpointPreference() {
         cachedEndpoint.set(null)
@@ -211,7 +211,7 @@ object ApiClient {
 
     private val retrofit: Retrofit by lazy {
         Retrofit.Builder()
-            .baseUrl(BuildConfig.API_HTTPS_BASE_URL)
+            .baseUrl(BuildConfig.API_HTTP_BASE_URL)
             .client(createDevOkHttpClient())
             .addConverterFactory(GsonConverterFactory.create(gson))
             .build()
